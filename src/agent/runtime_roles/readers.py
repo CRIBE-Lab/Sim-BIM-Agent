@@ -20,7 +20,6 @@ PLAN_READER_TOOL_NAMES = (
     "inputs",
     "view_image",
     "view_plan_blocks",
-    "pixel_profile",
     "view_pixel_profile",
     "view_pixel_region_overview",
     "view_pixel_region",
@@ -42,8 +41,8 @@ READER_TOOL_NAMES = {
 _IMAGE_KEYS = {"image", "name", "plan_image", "floor_plan_image", "elevation_image"}
 _REFERENCE_KEYS = {"view_id", "profile", "profile_id", "overview_id", "region_id"}
 
-# sm24/sm21 traces had 20/32/35 looks before any trial. Six allows the whole
-# image, the block batch and a few targeted looks, without forbidding further reads.
+# Remind readers to try a draft after the whole image, block views and a few
+# targeted looks. This reminder does not forbid further observations.
 PRETRIAL_REMINDER_THRESHOLD = 6
 PLAN_OBSERVATION_TOOLS = frozenset(PLAN_READER_TOOL_NAMES) - {
     "inputs", "get_bim_reference", "trial_plan_bim", "read_plan_draft", "submit_plan_reading",
@@ -461,20 +460,6 @@ class ReaderTools:
         source = await self.frozen.list_tools()
         by_name = {tool.get("name"): tool for tool in source}
         wanted = READER_TOOL_NAMES[self.role_id]
-        # The frozen wrapper intentionally hides historical ``pixel_profile``;
-        # the reader contract retains it as a numeric-only alias for the current
-        # view_pixel_profile(include_image=false) operation.
-        if "pixel_profile" in wanted and "pixel_profile" not in by_name and "view_pixel_profile" in by_name:
-            alias = copy.deepcopy(by_name["view_pixel_profile"])
-            alias["name"] = "pixel_profile"
-            alias["description"] = (
-                "Return the current single-image pixel profile without an image; "
-                "equivalent to view_pixel_profile(include_image=false)."
-            )
-            schema = alias.get("inputSchema")
-            if isinstance(schema, dict) and isinstance(schema.get("properties"), dict):
-                schema["properties"].pop("include_image", None)
-            by_name["pixel_profile"] = alias
         from .submission import SUBMISSION_TOOLS, OPERATION_SCHEMA
         local = {"view_plan_blocks", "trial_plan_bim", "read_plan_draft", "submit_plan_reading", "submit_elevation_reading", "trial_elevation_reading"}
         missing = [name for name in wanted if name not in local and name not in by_name]
@@ -663,14 +648,9 @@ class ReaderTools:
             try:
                 if "plan" in arguments:
                     plan = dict(arguments["plan"])
-                    baseline = self.trial.baseline()[0] if hasattr(self.trial, "baseline") else None
-                    # Recovery must retain its admitted declaration contract.
-                    # Inserting the new marker into a legacy rework would change
-                    # an immutable field outside its permitted repair targets.
-                    if baseline is None or baseline.get("reading_type") == "plan":
-                        plan.setdefault("reading_type", "plan")
+                    plan.setdefault("reading_type", "plan")
                     # The task fixes the floor ID; operations cannot edit it, so a
-                    # different spelling would block delivery (10-07 sm24 run4).
+                    # different spelling would prevent matching the delivery to its task.
                     if self.submission.target_identity is not None:
                         plan["floor_id"] = self.submission.target_identity
                     result = await self.trial.call(plan)
@@ -690,11 +670,6 @@ class ReaderTools:
                 counts = self._progress["by_tool"]
                 counts[name] = counts.get(name, 0) + 1
                 self._save_references()
-            delegated_name = name
-            delegated_arguments = dict(arguments)
-            if name == "pixel_profile":
-                delegated_name = "view_pixel_profile"
-                delegated_arguments["include_image"] = False
             if name == "get_bim_reference":
                 from .guidance import reader_references
                 references = reader_references(self.role_id)
@@ -709,7 +684,7 @@ class ReaderTools:
                 from .plan_views import view_plan_blocks
                 result = await view_plan_blocks(self.frozen, self.image_name)
             else:
-                result = await self.frozen.call_tool(delegated_name, delegated_arguments)
+                result = await self.frozen.call_tool(name, dict(arguments))
         if name != "trial_plan_bim" and not (isinstance(result, Mapping) and result.get("isError") is True):
             self._remember_references(result)
         count = self._progress["observation_calls_before_first_trial"]

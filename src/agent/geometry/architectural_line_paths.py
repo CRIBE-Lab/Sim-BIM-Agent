@@ -77,7 +77,7 @@ Bindings are local pre-compiler state, not a new user-facing plan schema.
         if any(identity not in curves for identity in identities):
             raise ValueError(f'templates.{name}: boundary_path references an unknown curve')
         if any(curves[identity].get('kind') != 'line' for identity in identities):
-            # Preserve the historical non-line branch; the common source gate
+            # Keep declared curves outside this line-only operation; the common source gate
             # still validates declarations that are outside this adapter.
             for path, _, _, _, uses in uses_by_node:
                 for use in uses:

@@ -1,7 +1,7 @@
-"""Q1 rule selection and audit presentation for saved plan operations.
+"""Run-bound geometry policies and audit records for saved BIM operations.
 
-Only the trusted run manifest may select the historical replay policy. A plan
-submitted by a model cannot opt out of the rules for a new operation.
+The frozen manifest declares the current rule. Model-supplied geometry cannot
+opt out; drawing-grid and mesh-specific policies retain their own scope.
 """
 from __future__ import annotations
 
@@ -13,13 +13,12 @@ import math
 
 
 CURRENT_RULE = "plan_regularization_v1"
-LEGACY_RULE = "legacy"
 CROSS_STOREY_FAILURE_POLICIES = {"reject_assembly", "skip_failed_pair"}
 
 
 def selected_rule(manifest):
-    rule = manifest.get("plan_regularization_rule", CURRENT_RULE)
-    if rule not in {CURRENT_RULE, LEGACY_RULE}:
+    rule = manifest.get("plan_regularization_rule")
+    if rule != CURRENT_RULE:
         raise ValueError(f"unknown plan_regularization_rule: {rule!r}")
     return rule
 
@@ -60,6 +59,7 @@ def classify_source_precision(report, manifest):
 
 def selected_grid_step(manifest):
     """Only newly admitted drawing runs declare the current whole-building grid."""
+    selected_rule(manifest)
     if "lite_bim_grid_step_m" not in manifest:
         return None
     from src.agent.geometry.lite_bim_regularization import DEFAULT_LITE_GRID_M
@@ -67,8 +67,6 @@ def selected_grid_step(manifest):
     if (isinstance(step, bool) or not isinstance(step, (int, float))
             or step != DEFAULT_LITE_GRID_M):
         raise ValueError("lite_bim_grid_step_m must be the current 0.1 m drawing policy")
-    if selected_rule(manifest) == LEGACY_RULE:
-        raise ValueError("a Lite BIM run cannot also select legacy regularization")
     return float(step)
 
 
@@ -189,18 +187,16 @@ def reject_source_proposal(toolkit, proposal, *, plan_assembly=None, parent=None
     grid_step = selected_grid_step(toolkit.manifest)
     from scripts.tool_scripts.bim_agent_source_precision import validate_reference_line_adoption
     adopted_precision = validate_reference_line_adoption(toolkit, proposal, architectural_regularization)
-    if selected_rule(toolkit.manifest) == LEGACY_RULE:
-        return None
     from src.agent.execution.source_proposal import _validate_proposal
-    from src.agent.correction.schema import FootprintRing
+    from src.agent.geometry_model.schema import FootprintRing
     from src.agent.geometry.source_bim import build_source_bim
     from src.agent.geometry.building_precision import precision_report
     from src.agent.geometry.input_scale import check_geometry_scale
-    from src.agent.execution.source_proposal import ensure_corrected_geometry
+    from src.agent.geometry_model.parse import parse_geometry
 
     try:
         geometry, _, _, enclosure = _validate_proposal(proposal)
-        geom = ensure_corrected_geometry(copy.deepcopy(geometry))
+        geom = parse_geometry(copy.deepcopy(geometry))
         for floor in geom.floors:
             footprint = getattr(floor, "footprint", None)
             if isinstance(footprint, dict):
@@ -289,7 +285,7 @@ def summary(report):
     return {
         "rule_version": report.get("rule_version", CURRENT_RULE),
         **({"axis_rule_applicability": report["hard_constraints"]["axis_rule_applicability"]}
-           if report.get("hard_constraints", {}).get("axis_rule_applicability") else {}),
+           if (report.get("hard_constraints") or {}).get("axis_rule_applicability") else {}),
         "grid_step_m": next((step for step in grid_steps if step is not None), None),
         "status": report.get("status", "rejected" if rejected else "passed"),
         "moved_count": len(changes),

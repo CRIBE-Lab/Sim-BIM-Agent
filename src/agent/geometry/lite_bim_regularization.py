@@ -88,7 +88,7 @@ def regularize_lite_plan(plan: dict, *, image_size: tuple[int, int], image_name:
     Only explicitly audited strips may disappear in the merge transaction.
     The following grid transaction must preserve its resulting relationships.
     """
-    from src.agent.geometry.plan_ink_alignment import _set_reading_alignment
+    from src.agent.geometry.plan_alignment import _set_reading_alignment
     from src.agent.geometry.plan_partition import compile_plan_partition
     from src.agent.geometry.plan_regularization import (
         PlanRegularizationError, _calibration, _pixel_coordinate, _relationship_signature,

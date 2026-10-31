@@ -11,8 +11,8 @@ from functools import lru_cache
 
 from pydantic import TypeAdapter, ValidationError
 
-from src.agent.correction.schema import RoomRoleEvidence, WallOpening
-from src.agent.geometry.source_schema import SourceWallOpening
+from src.agent.geometry_model.schema import RoomRoleEvidence, WallOpening
+from src.agent.geometry_model.source_polygon import SourceWallOpening
 from src.agent.roles import require_role
 
 

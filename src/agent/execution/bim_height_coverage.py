@@ -60,25 +60,6 @@ def _scope(opening_ids: list[str], rows: dict[str, dict]) -> dict:
     }
 
 
-def compact_height_coverage(report: dict) -> dict:
-    """Remove detailed binding evidence while retaining actionable scopes."""
-    compact = {
-        key: copy.deepcopy(report[key]) for key in (
-            "schema_version", "candidate", "source_model_sha256", "summary",
-            "drawing_fidelity", "delivery_blocked", "note",
-        ) if key in report
-    }
-    compact["openings"] = [{
-        key: copy.deepcopy(row[key]) for key in (
-            "opening_id", "kind", "floor_ids", "facade", "absolute_z_m",
-            "coverage_state", "image_height_evidence_linked",
-        ) if key in row
-    } for row in report.get("openings", [])]
-    compact["floors"] = copy.deepcopy(report.get("floors", []))
-    for floor in compact["floors"]:
-        for facade in floor.get("facades", []):
-            facade.pop("exterior_boundary_ids", None)
-    return compact
 
 
 def height_coverage(store, candidate, current_state=None):
@@ -112,11 +93,7 @@ def height_coverage(store, candidate, current_state=None):
                 target_kinds[row["id"]] = kind
 
     claim_records = {row["id"]: row for row in store.status()["claims"]}
-    from src.agent.runtime_roles.height_evidence import (
-        delivered_reader_height_index,
-        verified_reader_height_reference,
-    )
-    delivered_reader_index = delivered_reader_height_index(store.run, source, candidate)
+    from src.agent.runtime_roles.height_evidence import verified_reader_height_reference
     links = {identity: [] for identity in openings}
     for claim_state in state.get("claims", []):
         decision = claim_state.get("decision") or {}
@@ -152,10 +129,6 @@ def height_coverage(store, candidate, current_state=None):
                         store.run, trace_row.get("reader_evidence"),
                         target={"kind": kind, "id": identity}, value=value, source=source_ref,
                     )
-                    if verified_reader is None:
-                        key = (kind, identity, tuple(value), source_ref.get("image"),
-                               tuple(source_ref.get("box", ())))
-                        verified_reader = delivered_reader_index.get(key)
                 evidence_class = (
                     "image" if verified_reader is not None
                     else "image" if per_object_basis in _IMAGE_BASES and claim.get("sources")

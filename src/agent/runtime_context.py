@@ -117,7 +117,7 @@ def update_building_context(engine, event, raw_result):
     old = next((s for s in context.state if s.key == "current-source-bim"), None)
     selected = old.value["candidate"] if old else None
     from scripts.tool_scripts.bim_agent_saved_result import read_saved_result
-    saved = read_saved_result(metadata, tool=event.payload.tool_name, run=run)
+    saved = read_saved_result(metadata)
     if not raw_result.get("isError"):
         selected = saved["saved_candidate"] or selected
     path = run / str(selected) / "source_model.json" if selected else None

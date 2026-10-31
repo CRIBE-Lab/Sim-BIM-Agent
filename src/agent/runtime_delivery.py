@@ -1,4 +1,4 @@
-"""Finish saved BIMs with T1's shared selection and delivery implementation."""
+"""Finish saved BIMs with the shared selection and delivery implementation."""
 
 from __future__ import annotations
 
@@ -104,11 +104,11 @@ def completed_building_handoff(engine) -> dict | None:
 
 
 def finalize_building(run: Path, *, reason: str, elapsed_seconds: float) -> dict:
-    """Mirror the subscription runner's timeout/selection precedence.
+    """Choose a saved building for delivery according to the runtime stop reason.
 
     Time or CNY budget stops prefer the latest complete building, even if a
     later partial candidate was selected. Other stops preserve a selection.
-    Completeness, geometry checks and HTML all come from the shared T1 code.
+    Completeness, geometry checks and HTML all come from the shared BIM delivery implementation.
     """
     timed_out = reason.endswith("time_budget_exhausted")
     money_stopped = reason.endswith("money_budget_exhausted") or reason == "money_cny_usage_unavailable"

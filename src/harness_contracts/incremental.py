@@ -108,8 +108,7 @@ class IncrementalBudgetIndex:
             token_overrun += s.token_overrun
             cny_overrun += s.money_cny_overrun
         if p.action in {"release", "reconcile"}:
-            # Imported only for new recovery actions; ordinary historical reserve
-            # and settle journals do not depend on that extension's availability.
+            # Import here to share full-log recovery checks without a module cycle.
             from .validation import validate_budget_recovery_event
             record = p.release if p.action == "release" else p.reconciliation
             identifier = record.reservation_id
@@ -200,16 +199,14 @@ class EventValidationIndex:
         if event.occurred_at.kind != "known":
             raise ValueError("complete logs require known timestamps")
         p = event.payload
-        if isinstance(p, ToolExecutionPayload) and p.capture_scope == "historical_excerpt":
-            raise ValueError("complete logs cannot contain historical-excerpt tool captures")
         if isinstance(p, AdapterRequestPayload) and p.final_request_body.kind == "missing":
             raise ValueError("complete logs require the exact final adapter request")
         self._check_ancestry(event)
         # model_construct is safe here: EventEnvelope already validated the closed
         # payload contract, and the headers above preserve complete-mode rules.
         view = EventLog.model_construct(mode="complete", events=(event,),
-                                       budget_limit=self.budget_limit, excerpt=None)
-        view._validate_single_event_references(self.events_by_id, set())
+                                       budget_limit=self.budget_limit)
+        view._validate_single_event_references(self.events_by_id)
         if isinstance(p, NetworkRecoveryPayload):
             request = self.events_by_id.get(p.request_event_id)
             if (request is None or not isinstance(request.payload, AdapterRequestPayload)

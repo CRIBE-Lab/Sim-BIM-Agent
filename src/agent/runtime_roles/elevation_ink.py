@@ -1,9 +1,9 @@
 """Conservative ink-line alignment for elevation opening observations.
 
-The reader's legacy ``bbox`` is an evidence crop, not an opening boundary.
+The reader's ``bbox`` is an evidence crop, not an opening boundary.
 This module therefore uses it only as a sampling region for left/right edges.
 Opening geometry comes from an explicit ``opening_bbox`` when present, or from
-legacy ``x_px`` plus ``sill_m``/``head_m`` when a vertical calibration proves
+``x_px`` plus ``sill_m``/``head_m`` when a vertical calibration proves
 the pixel-to-height conversion.
 
 The public function returns an alignment envelope and never mutates the input
@@ -58,7 +58,7 @@ def align_elevation_artifact(
       ``pixel_start``, ``pixel_end``, ``world_start_m`` and ``world_end_m``.
       Image Y must increase while world Z decreases.
 
-    Legacy artifacts remain useful horizontally through ``x_px``.  Their
+    Horizontal observations can use ``x_px``. Their
     vertical bounds are derived from ``sill_m`` and ``head_m`` only when the
     explicit Z calibration is valid; otherwise top/bottom are not invented.
     """
@@ -168,7 +168,7 @@ def _align_opening(
         left, right = x_pair if x_pair is not None else (None, None)
         top = _world_to_pixel(z_calibration, opening.get("head_m"))
         bottom = _world_to_pixel(z_calibration, opening.get("sill_m"))
-        geometry_source = "legacy_x_px_and_calibrated_heights"
+        geometry_source = "x_px_and_calibrated_heights"
 
     original_box: list[float | None] = [left, top, right, bottom]
     if opening.get("evidence_type") == "pixels":
@@ -516,7 +516,7 @@ def _sampling_vertical_span(
     if top is not None and bottom is not None and top < bottom:
         return _trimmed_span(top, bottom, image_height)
     if evidence_box is not None:
-        # Legacy bbox is safe as a trace sampling region, never as geometry.
+        # An evidence bbox is a trace sampling region, never geometry.
         return _trimmed_span(evidence_box[1], evidence_box[3], image_height)
     return 0, image_height
 

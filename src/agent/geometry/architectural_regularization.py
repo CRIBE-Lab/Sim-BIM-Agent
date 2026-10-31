@@ -961,7 +961,7 @@ def regularize_architectural_proposal(proposal, *, policy=None):
                            'the declared common footprint intervals must have positive length')
                 footprint = {'vertices': [[x0,y0],[x1,y0],[x1,y1],[x0,y1]]}
                 footprint_bases.append(dict(type='footprint_declaration', path=f'geometry.floors[{name}].footprint',
-                    basis='legacy_common_footprint', footprint_x=[x0,x1], footprint_y=[y0,y1]))
+                    basis='shared_footprint', footprint_x=[x0,x1], footprint_y=[y0,y1]))
             template = dict(footprint=footprint, spaces=[])
             for j, cell in enumerate(floor['cells']):
                 cid, sid = cell['id'], f'S{j}'

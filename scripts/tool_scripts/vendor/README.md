@@ -1,7 +1,7 @@
 # Vendored three.js (offline geometry viewer)
 
 `render_geometry_viewer.py` inlines these into a self-contained `geometry_viewer.html`
-so the geometry-confirmation gate works fully offline (file:// double-click, no CDN).
+so users can inspect Sim-BIM models offline by opening the HTML in a browser.
 
 - `three.min.js` — three.js r0.137.5 UMD global build (attaches global `THREE`).
 - `OrbitControls.js` — three.js r0.137.5 `examples/js/controls/OrbitControls.js`

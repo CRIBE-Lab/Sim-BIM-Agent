@@ -1,7 +1,7 @@
 """Exact horizontal sections of one connected source volume.
 
-The optional sections describe geometry, never extra rooms or storeys.  Legacy
-spaces remain one prism; top-level polygon/holes are the full XY projection.
+The optional sections describe geometry, never extra rooms or storeys. Spaces
+without sections are single prisms; top-level polygon/holes are the full XY projection.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def validate_vertical_sections(sections, polygon, holes, z_floor, height):
 
 
 def space_sections(space):
-    """Return slab records for a SourceSpace dict/model, including old prisms."""
+    """Return slab records for a SourceSpace dict/model, including constant-section prisms."""
     row = _dict(space)
     if row.get("vertical_sections"):
         return [_dict(section) for section in row["vertical_sections"]]

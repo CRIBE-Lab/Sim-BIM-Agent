@@ -1,8 +1,6 @@
-"""Official stage-0 contracts for the domain-neutral agent harness core."""
+"""Shared runtime contracts for the domain-neutral agent harness core."""
 
 from .base import (
-    HistoricalParentMissing,
-    HistoricalTimestampMissing,
     KnownParentTask,
     KnownTimestamp,
     RootTask,
@@ -34,7 +32,7 @@ from .events import (
     ContextEventPayload,
     CheckpointPayload,
     EventEnvelope,
-    ExternalCoordinatorMcpPayload,
+    ContextImportPayload,
     InjectedContent,
     InlineCapture,
     MissingCapture,
@@ -65,7 +63,6 @@ from .events import (
 )
 from .refs import (
     HashedBlobRef,
-    HistoricalBlobHashMissing,
     ImageTransmission,
     SourceRef,
 )
@@ -80,7 +77,7 @@ from .roles import (
     authorize_tool_call,
     initial_model_for,
 )
-from .validation import EventLog, ExcerptDisclosure, validate_event_log
+from .validation import EventLog, validate_event_log
 
 __all__ = [
     "AdapterRequestPayload",
@@ -103,12 +100,8 @@ __all__ = [
     "EstimatedCostUpperBound",
     "EventEnvelope",
     "EventLog",
-    "ExcerptDisclosure",
-    "ExternalCoordinatorMcpPayload",
+    "ContextImportPayload",
     "HashedBlobRef",
-    "HistoricalBlobHashMissing",
-    "HistoricalParentMissing",
-    "HistoricalTimestampMissing",
     "ImageTransmission",
     "InjectedContent",
     "InlineCapture",

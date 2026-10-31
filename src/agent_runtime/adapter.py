@@ -126,7 +126,9 @@ def prepare_request(*, store: EventStore, model: str, messages: list[dict],
                     model_profile: ModelProfile | None = None,
                     strict_model_profile: bool = False,
                     reasoning_history: str = "all"):
-    if versions.remote_model.route_id == "deepseek" and reasoning_history != "all":
+    from .providers import is_deepseek_route
+    deepseek = is_deepseek_route(versions.remote_model.route_id, model)
+    if deepseek and reasoning_history != "all":
         raise ValueError("DeepSeek tool calls require reasoning_history=all")
     if versions.remote_model.route_id == "opencode-go":
         from .opencode_go import model_contract, model_profile as go_profile, prepare_request as prepare_go
@@ -173,15 +175,17 @@ def prepare_request(*, store: EventStore, model: str, messages: list[dict],
         messages, message_sources = _paratera_chat_messages(store, messages, message_sources)
     body = {"model": model, "messages": copy.deepcopy(messages),
             "stream": False, "n": 1, **copy.deepcopy(parameters)}
-    if versions.remote_model.route_id == "deepseek":
+    if deepseek:
         body.pop("n")
     if versions.remote_model.route_id in {"glm-subscription", "opencode-go"}:
         # No unverified sampling count on the Coding Plan endpoint. Capture the
         # resulting body below so the journal remains identical to wire bytes.
-        body.pop("n")
+        body.pop("n", None)
         allowed = ({"max_completion_tokens"}
                    if versions.remote_model.route_id == "opencode-go" and model == "mimo-v2.6-flash"
                    else {"max_tokens", "temperature", "reasoning_effort"})
+        if deepseek:
+            allowed = {"max_tokens", "temperature", "reasoning_effort", "thinking"}
         unsupported = set(parameters) - allowed
         if unsupported:
             raise ValueError("unreviewed subscription chat parameters: " + ", ".join(sorted(unsupported)))

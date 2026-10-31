@@ -1,9 +1,4 @@
-"""Model-facing summaries; full immutable replies remain readable through MCP.
-
-A3-T usage audit: five GLM/Qwen/T1 runs reuse IDs, draft hashes, calibration,
-partition coordinates and opening heights. Keep those; remove duplicated
-provenance, polygon/vertex copies and projection internals from routine replies.
-"""
+"""Compact model-facing summaries with hash-bound access to complete replies. Preserve IDs, draft hashes, calibration, coordinates and opening heights."""
 from __future__ import annotations
 
 import copy
@@ -136,7 +131,6 @@ def change_fields(rows):
 
 
 def precision_summary(report):
-    # building_precision_v1 reported; v2 (Q1 hard constraints) passes or rejects.
     if report.get('status') not in {'reported', 'pass', 'rejected'}:
         return report
     result = pick(report, ('schema', 'status', 'source_model_sha256', 'total', 'counts', 'evidence_errors',

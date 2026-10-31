@@ -172,7 +172,7 @@ def parametric_primitive_frame_context(plan: dict) -> list[dict]:
 
 
 def normalize_parametric_primitives(plan: dict) -> dict:
-    """Return an idempotent legacy-schema copy, without primitive declarations.
+    """Return an idempotent expanded-plan copy, without primitive declarations.
 
     All primitive forms require source_polygon_v1. Aperture baseline expansion
     preserves IDs, declared sides, span distances and heights. The common source

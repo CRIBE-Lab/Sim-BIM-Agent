@@ -412,8 +412,3 @@ def bind_wall_readings(source: dict, readings: list[dict]) -> dict:
         for field in result:
             result[field].extend(patch[field])
     return result
-
-
-def bind_wall_metadata(source: dict, plan: dict, metadata: dict | None = None) -> dict:
-    """Return a source-field patch without mutating source, plan or metadata."""
-    return bind_wall_readings(source, [wall_reading_input(plan, metadata)])

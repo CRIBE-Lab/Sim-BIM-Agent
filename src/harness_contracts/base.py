@@ -30,15 +30,7 @@ class KnownTimestamp(ContractModel):
         return value
 
 
-class HistoricalTimestampMissing(ContractModel):
-    kind: Literal["historical_missing"] = "historical_missing"
-    reason: NonEmptyStr
-
-
-EventTimestamp = Annotated[
-    KnownTimestamp | HistoricalTimestampMissing,
-    Field(discriminator="kind"),
-]
+EventTimestamp = KnownTimestamp
 
 
 class RootTask(ContractModel):
@@ -50,12 +42,7 @@ class KnownParentTask(ContractModel):
     task_id: NonEmptyStr
 
 
-class HistoricalParentMissing(ContractModel):
-    kind: Literal["historical_missing"] = "historical_missing"
-    reason: NonEmptyStr
-
-
 ParentTaskRef = Annotated[
-    RootTask | KnownParentTask | HistoricalParentMissing,
+    RootTask | KnownParentTask,
     Field(discriminator="kind"),
 ]

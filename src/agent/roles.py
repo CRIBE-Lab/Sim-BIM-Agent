@@ -22,7 +22,7 @@ _LOOKUP.update({_key(row["label_zh"]): code for code, row in ROOM_TYPES.items()}
 
 
 def normalize(label: str | None) -> str:
-    """Resolve catalog names/known historical aliases; retain unknown text."""
+    """Resolve catalog names and synonyms; retain unknown text."""
     text = _key(str(label or ""))
     return _LOOKUP.get(text, text)
 
@@ -106,7 +106,7 @@ def room_use_review(source: dict, *, include_next_action: bool = True) -> dict:
                         "No use change is indicated by these records. Retain existing plausible assignments and "
                         "missing-evidence counts; proceed with normal closeout unless substantive contrary evidence appears."),
         "interpretation": "Counts cover structured role_evidence only, not semantic correctness. "
-                          "Legacy source_refs may contain other evidence. Unknown remains a fallback when "
+                          "Source references may contain other evidence. Unknown remains a fallback when "
                           "no defensible listed use fits; it is not a preferred response to ambiguity. "
                           "No-issue status does not establish that roles are correct.",
         "drawing_fidelity": "not_evaluated", "delivery_blocked": False,

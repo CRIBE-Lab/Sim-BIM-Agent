@@ -175,7 +175,7 @@ def conservative_compatibility_profile(model: str) -> ModelProfile:
         image_estimator="decoded_pixels_v0",
         image_patch_size=16, image_merge_size=2, image_min_pixels=65536,
         image_max_pixels=16777216, image_special_tokens=2,
-        image_source="legacy decoded-pixel compatibility upper bound",
+        image_source="unverified decoded-pixel upper bound",
         image_uncertainty="Unknown image tokenizer; decoded pixels are retained as a deliberately loose compatibility upper bound.",
         profile_status="unverified_conservative_approximation",
     )

@@ -15,7 +15,7 @@ def render_input_view(path, *, name, box=None, coordinate_grid=True, display_sca
     if (not isinstance(display_scale, (int, float)) or isinstance(display_scale, bool)
             or not math.isfinite(display_scale)):
         raise ValueError("display_scale must be a finite number; allowed range is 1 through 8")
-    # GLM sm24 requested 0.7x. Preserve intent within the display-only limits.
+    # Clamp only the display scale; preserve the original coordinate space.
     requested_scale = display_scale
     display_scale = max(1, min(8, display_scale))
     with Image.open(path) as raw:
@@ -58,7 +58,7 @@ def render_input_view(path, *, name, box=None, coordinate_grid=True, display_sca
     if requested_scale != display_scale:
         metadata["display_scale_note"] = f"Requested {requested_scale}x; clamped to allowed [1, 8]: {display_scale}x."
     if display_scale > 1 and min(actual_scale) < display_scale - 0.05:
-        # run94 asked 1.5-2x for 1100-1500 px strips and got 1.08-1.43x without noticing.
+        # Make the actual magnification clear when the image-size cap applies.
         metadata["magnification_note"] = (
             f"Returned images are at most 1600 px on their long side, so this {crop_size[0]}x{crop_size[1]} px "
             f"box was enlarged only {min(actual_scale):.2f}x; choose a smaller box to magnify more.")

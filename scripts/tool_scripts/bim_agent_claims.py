@@ -1,10 +1,4 @@
-"""A2-T evidence transactions and conservative candidate-local claim binding.
-
-T1 sm25 step 115 rejected unchanged targets after a different window and room
-labels changed. Keep the immutable claim and the strict legacy resolver; supply
-a temporary binding view only after checking ancestry, every intervening target
-context, original views and recomputed values. No geometry computation changes.
-"""
+"""Evidence transactions with immutable claims and candidate-local binding. Inheritance checks every intervening target, original image and recomputed value."""
 from __future__ import annotations
 
 import copy

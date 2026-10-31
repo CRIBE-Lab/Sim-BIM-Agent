@@ -25,8 +25,6 @@ class RoleContextOverrides(BaseModel):
 
     context_tokens: int | None = Field(default=None, ge=1)
     compact_at_tokens: int | None = Field(default=None, ge=1)
-    active_window_messages: int | None = Field(default=None, ge=1)
-    large_result_bytes: int | None = Field(default=None, ge=1)
     max_images: int | None = Field(default=None, ge=1)
     max_image_bytes: int | None = Field(default=None, ge=1)
 

@@ -68,8 +68,6 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
         raise ValueError("ChatGPT subscription cannot enforce a reduced output cap; use --near-limit stop")
     global_context = {"context_tokens": args.context_tokens,
         "compact_at_tokens": args.compact_at_tokens,
-        "active_window_messages": args.context_window,
-        "large_result_bytes": args.large_result_bytes,
         "max_images": args.max_images, "max_image_bytes": args.max_image_bytes}
     global_context = {key: value for key, value in global_context.items() if value is not None}
     role_contexts = {name: effective_role_context(name, global_defaults=global_context,

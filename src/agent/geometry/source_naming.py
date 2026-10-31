@@ -1,4 +1,4 @@
-"""Public BIM names separate from source identities; June 23 naming contract."""
+"""Stable public BIM names, separate from persistent source identities."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -6,7 +6,6 @@ import re
 
 from shapely.geometry import LineString, Point, Polygon
 
-from src.agent.geometry.modelling import _canonical_ring, _geometry_fingerprint, _zone_centroid_key, _zone_quadrant
 from src.agent.roles import ROOM_TYPES, normalize
 
 
@@ -15,12 +14,74 @@ ROW_TOLERANCE_M = 1e-6
 SCHEME_VERSION = "bim_names_v3"
 
 
+_NAME_QUANT = 6
+
+
+def _q(value: float) -> float:
+    return round(float(value), _NAME_QUANT)
+
+
+def _qpt(pt) -> tuple[float, float]:
+    return (_q(pt[0]), _q(pt[1]))
+
+
+def _is_ccw(coords: list) -> bool:
+    s = 0.0
+    for i in range(len(coords) - 1):
+        x1, y1 = coords[i][0], coords[i][1]
+        x2, y2 = coords[i + 1][0], coords[i + 1][1]
+        s += (x2 - x1) * (y2 + y1)
+    return s < 0  # shoelace: negative sum => CCW
+
+
+def _canonical_ring(poly: Polygon) -> tuple[tuple[float, float], ...]:
+    coords = [_qpt(p) for p in list(poly.exterior.coords)[:-1]]
+    if len(coords) < 3:
+        return tuple(coords)
+    if not _is_ccw(coords + [coords[0]]):
+        coords = list(reversed(coords))
+    start = min(range(len(coords)), key=lambda i: (coords[i][1], coords[i][0]))
+    return tuple(coords[start:] + coords[:start])
+
+
+def _geometry_fingerprint(poly: Polygon) -> tuple:
+    minx, miny, maxx, maxy = poly.bounds
+    return (
+        (_q(minx), _q(miny), _q(maxx), _q(maxy)),
+        _q(poly.area),
+        _canonical_ring(poly),
+    )
+
+
+def _zone_centroid_key(poly: Polygon) -> tuple[float, float]:
+    c = poly.centroid
+    return (_q(-c.y), _q(c.x))
+
+
+def _zone_quadrant(poly: Polygon, footprint_x: list[float], footprint_y: list[float]) -> str:
+    cx = (float(footprint_x[0]) + float(footprint_x[1])) / 2.0
+    cy = (float(footprint_y[0]) + float(footprint_y[1])) / 2.0
+    half_w = max(abs(float(footprint_x[1]) - float(footprint_x[0])) / 2.0, 1e-9)
+    half_h = max(abs(float(footprint_y[1]) - float(footprint_y[0])) / 2.0, 1e-9)
+    p = poly.centroid
+    dx, dy = p.x - cx, p.y - cy
+    tol_x = min(half_w * 0.05, 0.5) + 1e-6
+    tol_y = min(half_h * 0.05, 0.5) + 1e-6
+    near_x = abs(dx) <= tol_x
+    near_y = abs(dy) <= tol_y
+    if near_x and near_y:
+        return "C"
+    ns = "" if near_y else ("N" if dy > 0 else "S")
+    ew = "" if near_x else ("E" if dx > 0 else "W")
+    return ns + ew
+
+
 def _ordered_spaces(spaces, polys, floor_order):
     """Group north-to-south rows before sorting west-to-east within each row.
 
     Anchor each row to its northernmost centroid to avoid transitive chains
     spanning more than the tolerance. Sorting first makes input order irrelevant
-    and avoids rounded-bin boundaries splitting numerical equals (run99).
+    and avoids rounded-bin boundaries splitting numerically equal values.
     """
     by_floor = defaultdict(list)
     for space in spaces:
@@ -133,24 +194,15 @@ def build_public_names(source: dict) -> dict:
 
 
 def public_names_for_display(source: dict) -> dict:
-    """Refresh old public maps for display only; never mutate a saved source."""
-    if (source.get("floors") and all(f.get("footprint") for f in source["floors"])
-            and all(s.get("polygon") for s in source.get("spaces", []))):
-        return build_public_names(source)
-    return source.get("public_names") or {}
+    """Derive display names from the current complete source geometry."""
+    return build_public_names(source)
 
 
-def public_reference_map(source: dict, names: dict) -> dict:
-    """Names for prose references, including a saved older public spelling."""
-    references = {}
-    old = source.get("public_names") or {}
-    for kind in ("floors", "spaces", "boundaries", "openings"):
-        for identity, name in names.get(kind, {}).items():
-            previous = old.get(kind, {}).get(identity)
-            if previous and previous != name:
-                references[previous] = name
-            references[identity] = name
-    return references
+def public_reference_map(names: dict) -> dict:
+    """Map persistent source identities to their current public display names."""
+    return {identity: name
+            for kind in ("floors", "spaces", "boundaries", "openings")
+            for identity, name in names.get(kind, {}).items()}
 
 
 def public_reference_text(value: object, references: dict) -> str:
@@ -202,4 +254,4 @@ def viewer_names(data: dict, parts: dict) -> dict:
                       for i, f in enumerate(floors, 1)],
             "spaces": names.get("spaces", {}), "objects": objects, "parts": fragment_names,
             "regions": region_names, "edges": edges,
-            "references": public_reference_map(source, names)}
+            "references": public_reference_map(names)}

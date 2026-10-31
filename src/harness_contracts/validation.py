@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from .base import ContractModel, NonEmptyStr
+from .base import ContractModel
 from .budget import BudgetAmounts, BudgetLedger
 from .events import (
     AdapterRequestPayload,
@@ -26,32 +26,17 @@ from .events import (
     ToolInvocationPayload,
     ToolPresentationPayload,
 )
-from .refs import SourceRef
-
-
-class ExcerptDisclosure(ContractModel):
-    reason: NonEmptyStr
-    omitted_event_types: tuple[NonEmptyStr, ...]
-    missing_event_ids: tuple[NonEmptyStr, ...] = ()
-    source_records: tuple[SourceRef, ...]
 
 
 class EventLog(ContractModel):
-    mode: Literal["complete", "excerpt"]
+    mode: Literal["complete"] = "complete"
     events: tuple[EventEnvelope, ...]
     budget_limit: BudgetAmounts | None = None
-    excerpt: ExcerptDisclosure | None = None
 
     @model_validator(mode="after")
     def validate_event_log(self) -> EventLog:
         if not self.events:
             raise ValueError("event log cannot be empty")
-        if self.mode == "excerpt":
-            if self.excerpt is None or not self.excerpt.source_records:
-                raise ValueError("excerpt mode needs disclosure and source records")
-        elif self.excerpt is not None:
-            raise ValueError("complete logs cannot carry excerpt disclosure")
-
         event_by_id: dict[str, EventEnvelope] = {}
         run_ids: set[str] = set()
         previous_sequence = -1
@@ -63,46 +48,31 @@ class EventLog(ContractModel):
             previous_sequence = event.sequence
             event_by_id[event.event_id] = event
             run_ids.add(event.run_id)
-            if self.mode == "complete":
-                if event.occurred_at.kind == "historical_missing":
-                    raise ValueError("complete logs require known timestamps")
-                if event.parent_task.kind == "historical_missing":
-                    raise ValueError("complete logs require known task ancestry")
-                if (
-                    isinstance(event.payload, ToolExecutionPayload)
-                    and event.payload.capture_scope == "historical_excerpt"
-                ):
-                    raise ValueError(
-                        "complete logs cannot contain historical-excerpt tool captures"
-                    )
-                if (
-                    isinstance(event.payload, AdapterRequestPayload)
-                    and event.payload.final_request_body.kind == "missing"
-                ):
-                    raise ValueError("complete logs require the exact final adapter request")
+            if (isinstance(event.payload, AdapterRequestPayload)
+                    and event.payload.final_request_body.kind == "missing"):
+                raise ValueError("complete logs require the exact final adapter request")
         if len(run_ids) != 1:
             raise ValueError("one EventLog represents exactly one run")
 
-        missing_ids = set(self.excerpt.missing_event_ids if self.excerpt else ())
-        self._validate_response_requests(event_by_id, missing_ids)
-        self._validate_answer_repairs(event_by_id, missing_ids)
-        self._validate_truncations(event_by_id, missing_ids)
-        self._validate_inspections(event_by_id, missing_ids)
-        self._validate_recovery(event_by_id, missing_ids)
-        self._validate_network_recovery(event_by_id, missing_ids)
-        self._validate_context(event_by_id, missing_ids)
-        self._validate_task_controls(event_by_id, missing_ids)
+        self._validate_response_requests(event_by_id)
+        self._validate_answer_repairs(event_by_id)
+        self._validate_truncations(event_by_id)
+        self._validate_inspections(event_by_id)
+        self._validate_recovery(event_by_id)
+        self._validate_network_recovery(event_by_id)
+        self._validate_context(event_by_id)
+        self._validate_task_controls(event_by_id)
         for event in self.events:
             if isinstance(event.payload, CheckpointPayload):
                 _require_prior_event(event.payload.after_event_id, event, event_by_id,
-                                     missing_ids, "checkpoint boundary")
+                                     "checkpoint boundary")
         self._validate_budget_events()
         self._validate_duplicate_writes()
-        self._validate_invocations(event_by_id, missing_ids)
-        self._validate_presentations(event_by_id, missing_ids)
+        self._validate_invocations(event_by_id)
+        self._validate_presentations(event_by_id)
         return self
 
-    def _validate_network_recovery(self, event_by_id, missing_ids):
+    def _validate_network_recovery(self, event_by_id):
         operations = {}
         settled = set()
         for event in self.events:
@@ -110,7 +80,7 @@ class EventLog(ContractModel):
             if not isinstance(p, NetworkRecoveryPayload):
                 continue
             request = _require_prior_event(p.request_event_id, event, event_by_id,
-                                           missing_ids, "network recovery request")
+                                           "network recovery request")
             if request is not None and (not isinstance(request.payload, AdapterRequestPayload)
                                         or request.task_id != event.task_id):
                 raise ValueError("network recovery must refer to this task's model request")
@@ -128,7 +98,7 @@ class EventLog(ContractModel):
                     raise ValueError("network recovery settlement differs from reservation")
                 settled.add(p.operation_id)
 
-    def _validate_task_controls(self, event_by_id, missing_ids) -> None:
+    def _validate_task_controls(self, event_by_id) -> None:
         acknowledged = set()
         for event in self.events:
             p = event.payload
@@ -140,7 +110,7 @@ class EventLog(ContractModel):
                 raise ValueError("task control already acknowledged")
             acknowledged.add(p.command_id)
 
-    def _validate_single_event_references(self, event_by_id, missing_ids) -> None:
+    def _validate_single_event_references(self, event_by_id) -> None:
         """Shared reference checks for an already typed new event.
 
         Incremental callers provide a one-event view and the committed index.
@@ -148,30 +118,30 @@ class EventLog(ContractModel):
         complete validation above still independently replays the whole log.
         New reference-bearing payloads must be checked in both paths.
         """
-        self._validate_response_requests(event_by_id, missing_ids)
-        self._validate_answer_repairs(event_by_id, missing_ids)
-        self._validate_truncations(event_by_id, missing_ids)
-        self._validate_inspections(event_by_id, missing_ids)
-        self._validate_recovery(event_by_id, missing_ids)
-        self._validate_context(event_by_id, missing_ids)
-        self._validate_task_controls(event_by_id, missing_ids)
+        self._validate_response_requests(event_by_id)
+        self._validate_answer_repairs(event_by_id)
+        self._validate_truncations(event_by_id)
+        self._validate_inspections(event_by_id)
+        self._validate_recovery(event_by_id)
+        self._validate_context(event_by_id)
+        self._validate_task_controls(event_by_id)
         for event in self.events:
             if isinstance(event.payload, CheckpointPayload):
                 _require_prior_event(event.payload.after_event_id, event, event_by_id,
-                                     missing_ids, "checkpoint boundary")
-        self._validate_invocations(event_by_id, missing_ids)
-        self._validate_presentations(event_by_id, missing_ids)
+                                     "checkpoint boundary")
+        self._validate_invocations(event_by_id)
+        self._validate_presentations(event_by_id)
 
-    def _validate_truncations(self, event_by_id, missing_ids) -> None:
+    def _validate_truncations(self, event_by_id) -> None:
         recorded = set()
         for event in self.events:
             p = event.payload
             if not isinstance(p, TruncationPayload):
                 continue
             request = _require_prior_event(p.request_event_id, event,
-                event_by_id, missing_ids, "truncated request")
+                event_by_id, "truncated request")
             response = _require_prior_event(p.response_event_id, event,
-                event_by_id, missing_ids, "truncated response")
+                event_by_id, "truncated response")
             if request is not None and not isinstance(request.payload, AdapterRequestPayload):
                 raise ValueError("truncation must reference an adapter request")
             if response is not None:
@@ -190,7 +160,7 @@ class EventLog(ContractModel):
                     or p.total_count > p.max_total_recoveries):
                 raise ValueError("truncation recovery exceeds its configured bound")
 
-    def _validate_answer_repairs(self, event_by_id, missing_ids) -> None:
+    def _validate_answer_repairs(self, event_by_id) -> None:
         requested_invalid_responses: set[str] = set()
         requesting_tasks: set[str] = set()
         results_by_request: set[str] = set()
@@ -199,7 +169,7 @@ class EventLog(ContractModel):
             if not isinstance(payload, AnswerRepairPayload):
                 continue
             invalid = _require_prior_event(payload.invalid_response_event_id, event,
-                event_by_id, missing_ids, "invalid answer response")
+                event_by_id, "invalid answer response")
             if invalid is not None and not isinstance(invalid.payload, ModelResponsePayload):
                 raise ValueError("invalid_response_event_id must reference a model response")
             if invalid is not None and invalid.task_id != event.task_id:
@@ -215,9 +185,9 @@ class EventLog(ContractModel):
                 requested_invalid_responses.add(payload.invalid_response_event_id)
                 continue
             request = _require_prior_event(payload.repair_request_event_id, event,
-                event_by_id, missing_ids, "answer repair request")
+                event_by_id, "answer repair request")
             repaired = _require_prior_event(payload.repaired_response_event_id, event,
-                event_by_id, missing_ids, "repaired answer response")
+                event_by_id, "repaired answer response")
             if request is not None and (
                 not isinstance(request.payload, AnswerRepairPayload)
                 or request.payload.phase != "request"
@@ -245,17 +215,17 @@ class EventLog(ContractModel):
                     if getattr(payload, field) != getattr(prior, field):
                         raise ValueError(f"answer repair result differs from its request: {field}")
 
-    def _validate_presentations(self, event_by_id, missing_ids) -> None:
+    def _validate_presentations(self, event_by_id) -> None:
         for event in self.events:
             p = event.payload
             if not isinstance(p, ToolPresentationPayload):
                 continue
             execution = _require_prior_event(p.tool_execution_event_id, event, event_by_id,
-                missing_ids, "presented tool result")
+                "presented tool result")
             request = _require_prior_event(p.request_event_id, event, event_by_id,
-                missing_ids, "presentation request")
+                "presentation request")
             response = _require_prior_event(p.response_event_id, event, event_by_id,
-                missing_ids, "presentation acknowledgement")
+                "presentation acknowledgement")
             if execution is None or not isinstance(execution.payload, ToolExecutionPayload):
                 raise ValueError("presentation must reference a tool execution")
             if request is None or not isinstance(request.payload, AdapterRequestPayload):
@@ -274,19 +244,19 @@ class EventLog(ContractModel):
                 raise ValueError("protocol conversion needs its native request and tool-result source")
             if (p.shown_result != execution.payload.shown_result and not converted) or p.context_event_id is not None:
                 context = _require_prior_event(p.context_event_id, event, event_by_id,
-                    missing_ids, "tool context projection")
+                    "tool context projection")
                 if (context is None or not isinstance(context.payload, ContextEventPayload)
                         or context.sequence >= request.sequence):
                     raise ValueError("changed tool presentation requires a prior context projection")
 
-    def _validate_invocations(self, event_by_id, missing_ids) -> None:
+    def _validate_invocations(self, event_by_id) -> None:
         completed: set[str] = set()
         for event in self.events:
             payload = event.payload
             if not isinstance(payload, ToolExecutionPayload) or payload.invocation_event_id is None:
                 continue
             invocation = _require_prior_event(payload.invocation_event_id, event,
-                event_by_id, missing_ids, "tool invocation")
+                event_by_id, "tool invocation")
             if invocation is None or not isinstance(invocation.payload, ToolInvocationPayload):
                 raise ValueError("execution must reference a prior tool invocation")
             if invocation.event_id in completed:
@@ -297,7 +267,7 @@ class EventLog(ContractModel):
                     raise ValueError(f"execution differs from tool invocation: {field}")
 
     def _validate_inspections(
-        self, event_by_id: dict[str, EventEnvelope], missing_ids: set[str]
+        self, event_by_id: dict[str, EventEnvelope]
     ) -> None:
         for event in self.events:
             payload = event.payload
@@ -307,12 +277,11 @@ class EventLog(ContractModel):
                 payload.target_event_id,
                 event,
                 event_by_id,
-                missing_ids,
                 "state inspection target",
             )
 
     def _validate_response_requests(
-        self, event_by_id: dict[str, EventEnvelope], missing_ids: set[str]
+        self, event_by_id: dict[str, EventEnvelope]
     ) -> None:
         for event in self.events:
             payload = event.payload
@@ -322,7 +291,6 @@ class EventLog(ContractModel):
                 payload.request_event_id,
                 event,
                 event_by_id,
-                missing_ids,
                 "model request",
             )
             if request is not None and not isinstance(
@@ -331,7 +299,7 @@ class EventLog(ContractModel):
                 raise ValueError("request_event_id must reference an adapter request")
 
     def _validate_recovery(
-        self, event_by_id: dict[str, EventEnvelope], missing_ids: set[str]
+        self, event_by_id: dict[str, EventEnvelope]
     ) -> None:
         for event in self.events:
             payload = event.payload
@@ -339,7 +307,7 @@ class EventLog(ContractModel):
                 continue
             if payload.model_failure is not None:
                 request = _require_prior_event(payload.model_failure.request_event_id,
-                    event, event_by_id, missing_ids, "model failure request")
+                    event, event_by_id, "model failure request")
                 if request is not None and not isinstance(request.payload, AdapterRequestPayload):
                     raise ValueError("model failure must reference an adapter request")
             if payload.action == "retry":
@@ -347,7 +315,6 @@ class EventLog(ContractModel):
                     payload.retry_of_event_id,
                     event,
                     event_by_id,
-                    missing_ids,
                     "retry target",
                 )
                 if original is None:
@@ -367,7 +334,6 @@ class EventLog(ContractModel):
                     payload.state_inspection_event_id,
                     event,
                     event_by_id,
-                    missing_ids,
                     "unknown-write state inspection",
                 )
                 if inspection is None:
@@ -388,7 +354,6 @@ class EventLog(ContractModel):
                     payload.state_inspection_event_id,
                     event,
                     event_by_id,
-                    missing_ids,
                     "resume state inspection",
                 )
                 if inspection is None or not isinstance(
@@ -409,7 +374,6 @@ class EventLog(ContractModel):
                 tool.retry_event_id,
                 event,
                 event_by_id,
-                missing_ids,
                 "tool retry",
             )
             if retry_event is None or not isinstance(
@@ -459,7 +423,7 @@ class EventLog(ContractModel):
             previous_write_by_key[operation_key] = event
 
     def _validate_context(
-        self, event_by_id: dict[str, EventEnvelope], missing_ids: set[str]
+        self, event_by_id: dict[str, EventEnvelope]
     ) -> None:
         for event in self.events:
             payload = event.payload
@@ -471,7 +435,6 @@ class EventLog(ContractModel):
                         replaced_id,
                         event,
                         event_by_id,
-                        missing_ids,
                         "compressed event",
                     )
                 continue
@@ -481,7 +444,6 @@ class EventLog(ContractModel):
                 payload.removal_event_id,
                 event,
                 event_by_id,
-                missing_ids,
                 "image removal",
             )
             if removal is None:
@@ -660,15 +622,12 @@ def _require_prior_event(
     referenced_id: str | None,
     current: EventEnvelope,
     event_by_id: dict[str, EventEnvelope],
-    missing_ids: set[str],
     label: str,
 ) -> EventEnvelope | None:
     if referenced_id is None:
         raise ValueError(f"{label} reference is required")
     referenced = event_by_id.get(referenced_id)
     if referenced is None:
-        if referenced_id in missing_ids:
-            return None
         raise ValueError(f"{label} event does not exist: {referenced_id}")
     if referenced.sequence >= current.sequence:
         raise ValueError(f"{label} must precede the referencing event")

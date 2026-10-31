@@ -269,16 +269,6 @@ def expand_elevation_submission(arguments, target):
     row = copy.deepcopy(_mapping(arguments, "arguments"))
     calibration = _mapping(row.get("x_calibration"), "x_calibration")
     view = {"North": "South", "South": "North", "East": "West", "West": "East"}[orientation]
-    if "world_start_m" in calibration:
-        # Historical recorded calls contain the expanded internal contract,
-        # which is intentionally absent from the current model-facing schema.
-        if row.get("orientation", orientation) != orientation:
-            raise ValueError("historical elevation orientation conflicts with task.target")
-        if row.get("view_direction", view) != view:
-            raise ValueError("historical elevation view_direction conflicts with task.target")
-        calibration.setdefault("world_axis", _world_axis(orientation))
-        row.update(orientation=orientation, view_direction=view, x_calibration=calibration)
-        return row
     import jsonschema
     jsonschema.validate(row, elevation_submission_tool()["inputSchema"])
     z = row.get("z_calibration")
@@ -1233,7 +1223,6 @@ def _horizontal_fit(elevation, source, *, position_tolerance_m, width_tolerance_
 
     Three points leave a residual check (two always fit perfectly). Widths stay
     independent observations; neither a count match nor a fit can waive them.
-    These conservative limits cover the measured 2.4% drift in sm24 run7.
     """
     if len(elevation) != len(source) or len(elevation) < 3:
         return None
@@ -1282,9 +1271,8 @@ def compare_opening_positions(plan_span, elevation_span, *, tolerance_m=0.10):
 def attach_ink_review(comparison, inconsistencies):
     """Keep the independent numeric comparison; add ink disagreements as evidence only.
 
-    Two independent readings within 10 cm keep the plan (user 10-07); an ink-check
-    disagreement alone does not open a decision (10-08: it blocked delivery while
-    plan and elevation agreed within 2 cm).
+    Two independent readings within 10 cm keep the plan. An ink-check
+    disagreement alone does not open a decision when the independent readings agree.
     """
     comparison["ink_inconsistencies"] = copy.deepcopy(inconsistencies)
     maximum = max((row["difference_m"] for row in inconsistencies), default=0.0)

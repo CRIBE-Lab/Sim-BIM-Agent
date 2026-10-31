@@ -1,9 +1,4 @@
-"""Thin MCP input/feedback handling; no geometry edits or implicit observations.
-
-T1: GLM sm21/24/25 used measurement labels as image names, sm24 exceeded
-the zoom limit and skipped claim adoption, sm25 omitted edit fields. Historical
-run53–58/98–100 also need actionable object, crop and note repair messages.
-"""
+"""MCP input validation and actionable feedback without geometry edits or implicit observations."""
 from __future__ import annotations
 
 import copy
@@ -35,8 +30,8 @@ def resolve_image_name(images, name):
                      "not a measurement label. Available filenames: " + json.dumps(sorted(images)))
 
 
-_NAMED_IMAGE_TOOLS = {"view_image", "pixel_profile", "view_pixel_profile",
-                      "view_pixel_region_overview", "view_pixel_region", "preview_space_trace"}
+_NAMED_IMAGE_TOOLS = {"view_image", "view_pixel_profile",
+                      "view_pixel_region_overview", "view_pixel_region"}
 
 
 def normalize_images(toolkit, tool, arguments):
@@ -98,7 +93,7 @@ def repair_hint(toolkit, tool, arguments, message):
         return "Use claim_transaction action=apply, or action=decide with disposition=deferred and a reason."
     if "stale for" in message:
         return "Read the reported changed targets/views/values; record new evidence for those targets. Unchanged targets can be handled separately in claim_transaction."
-    if tool == "revise_plan_bim":
+    if tool == "revise_plan_bim" and "operation" in message.lower():
         try:
             ops = json.loads(arguments.get("operations_json", "[]"))
             if not isinstance(ops, list):
@@ -143,8 +138,10 @@ def repair_hint(toolkit, tool, arguments, message):
         return 'Next: read get_bim_reference(topic="wall_dimensions") for the explicit wall reference and position format.'
     if tool == "compare_facade_spans":
         return 'Next: read get_bim_reference(topic="facade_correspondence") for independently declared axis anchors and opening spans.'
-    if tool in {"prepare_elevation_reading", "apply_elevation_readings"}:
+    if tool in {"prepare_elevation_reading", "apply_elevation_readings", "finish_bim"}:
         return 'Next: read get_bim_reference(topic="drawing_process") for the reading, review and application format.'
+    if tool == "revise_plan_bim":
+        return 'Next: read get_bim_reference(topic="plan_partition") for saved plan revisions and draft identity.'
     return "Next: read get_bim_reference(topic=" + json.dumps(
         "claims" if "claim" in tool else "edits" if "revise" in tool else "plan_partition") + ") for the operation format."
 
@@ -231,8 +228,6 @@ class FeedbackMCP(FastMCP):
             result = await super().call_tool(name, normalized)
         except Exception as error:
             message = str(error)
-            # C2: T1 sm25 calls 63/65 lost the actual rejection when the hint
-            # itself raised KeyError. An explanatory failure must never hide it.
             try:
                 hint = repair_hint(self.toolkit, name, arguments, message)
             except Exception:

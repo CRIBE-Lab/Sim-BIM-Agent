@@ -44,13 +44,3 @@ def logical_openings(source):
                           'vertices': [point(lo, bottom), point(hi, bottom), point(hi, top), point(lo, top)]}
         consumed.update(ids)
     return list(rows.values())
-
-
-def expand_opening_policy(source, policy):
-    result = copy.deepcopy(policy or {})
-    logical_openings(source)  # Validate groups before allowing shared simulation decisions.
-    for identity, ids in source.get('opening_segment_groups', {}).items():
-        if identity in result:
-            for part in ids:
-                result.setdefault(part, copy.deepcopy(result[identity]))
-    return result

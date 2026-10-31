@@ -1,4 +1,4 @@
-"""Deterministic, auditable local edits for direct legacy geometry proposals."""
+"""Deterministic, auditable local edits for explicit geometry proposals."""
 from __future__ import annotations
 
 import copy
@@ -9,9 +9,9 @@ from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from src.agent.correction.parse import ensure_corrected_geometry
-from src.agent.correction.cell_geometry import cell_polygon
-from src.agent.correction.schema import RoomRoleEvidence, Window, WallOpening
+from src.agent.geometry_model.parse import parse_geometry
+from src.agent.geometry_model.cells import cell_polygon
+from src.agent.geometry_model.schema import RoomRoleEvidence, Window, WallOpening
 
 
 _PROPOSAL_FIELDS = {"geometry", "assumptions", "unresolved", "enclosure_declaration",
@@ -64,9 +64,9 @@ def _validate_proposal(proposal: dict) -> dict:
     geometry = proposal["geometry"]
     if not isinstance(geometry, dict):
         raise TypeError("proposal.geometry must be an object")
-    version = str(geometry.get("schema_version", "1"))
-    if version not in {"1", "2", "source_polygon_v1"}:
-        raise ValueError("proposal geometry must use schema_version 1, 2 or source_polygon_v1")
+    version = str(geometry.get("schema_version", "2"))
+    if version not in {"2", "source_polygon_v1"}:
+        raise ValueError("proposal geometry must use schema_version 2 or source_polygon_v1")
     _notes(proposal["assumptions"], field="assumptions")
     _notes(proposal["unresolved"], field="unresolved")
     if "mesh_frame" in proposal:
@@ -75,7 +75,7 @@ def _validate_proposal(proposal: dict) -> dict:
     enclosure = proposal.get("enclosure_declaration")
     if enclosure is not None and not isinstance(enclosure, dict):
         raise TypeError("proposal.enclosure_declaration must be an object")
-    ensure_corrected_geometry(geometry)
+    parse_geometry(geometry)
     return geometry
 
 
@@ -242,7 +242,7 @@ def _add_opening(geometry: dict, operation: dict) -> dict:
         raise ValueError("add_opening: opening must be an object")
     row["source_refs"] = refs
     if geometry.get("schema_version") == "source_polygon_v1":
-        from src.agent.geometry.source_schema import SourceWallOpening
+        from src.agent.geometry_model.source_polygon import SourceWallOpening
         from src.agent.geometry.source_curves import expand_source_polygon_geometry
         row = expand_source_polygon_geometry({'schema_version': 'source_polygon_v1',
             'boundary_curves': geometry.get('boundary_curves', {}), 'openings': [row]})['openings'][0]
@@ -288,7 +288,7 @@ def _finite_coordinate(value: object, *, operation: str) -> float:
 
 
 def _polygon_ring_and_bbox(value: object, *, operation: str, space_id: str, minimum_vertices=4) -> tuple[list[list[float]], list[float], list[float]]:
-    """Validate an edit ring enough to derive its legacy bbox without repairing it.
+    """Validate an edit ring enough to derive its bounding box without repairing it.
 
     Full source-space validity (orthogonality, winding, coverage and opening
     hosts) deliberately remains the source-BIM builder's responsibility.  In
@@ -316,7 +316,7 @@ def _reshape_spaces(proposal: dict, geometry: dict, operation: dict) -> dict:
     ``spaces`` is a nonempty list of ``{"id", "polygon"}`` rows.  Each
     supplied polygon replaces exactly one existing source space, including a
     rectangle (which is represented as a four-point ring).  The code derives
-    that cell's legacy ``x``/``y`` bbox from the ring.  It does not move, scale,
+    that cell's ``x``/``y`` bounding box from the ring.  It does not move, scale,
     rehost, or otherwise alter openings and windows; callers may place an
     explicit ``update_opening`` alongside this operation when evidence calls
     for it.
@@ -717,7 +717,7 @@ def _rebind_edited_wall_readings(proposal: dict, audit: dict, edit_index: int) -
     from src.agent.geometry.source_model import source_primitives
 
     changed_ids = set(audit["before"]["cells"])
-    spaces, boundaries, _, _ = source_primitives(ensure_corrected_geometry(proposal["geometry"]))
+    spaces, boundaries, _, _ = source_primitives(parse_geometry(proposal["geometry"]))
     floor_by_space = {space.id: space.floor_id for space in spaces}
     changed_floors = {floor_by_space[identity] for identity in changed_ids}
     before, after = [], []
@@ -782,7 +782,7 @@ def _rebind_edited_wall_readings(proposal: dict, audit: dict, edit_index: int) -
 
 
 def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
-    """Return an independently editable legacy proposal after explicit local edits.
+    """Return an independently editable geometry proposal after explicit local edits.
 
     The input proposal is never changed.  This does not claim any edit is
     faithful to a drawing; it records the newly supplied reason/source evidence
@@ -859,5 +859,5 @@ def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
             _rebind_edited_wall_readings(result, audit, len(corrections))
         corrections.append(audit)
         _unique_ids(geometry)
-    ensure_corrected_geometry(geometry)
+    parse_geometry(geometry)
     return result

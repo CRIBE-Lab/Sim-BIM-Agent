@@ -154,7 +154,7 @@ def materialize_plan_reading(plan, *, elevations: Mapping, image_size, image_nam
                     elevation_opening_ids=[left[i]["id"] for i in only_left],
                     plan_opening_ids=[right[j]["source_id"] for j in only_right]))
 
-    # The legacy compiler requires explicit source references. Binding omitted
+    # The geometry compiler requires explicit source references. Binding omitted
     # ones locates declarations in their input image without claiming verification.
     for partition in result["partitions"]:
         partition.setdefault("source_refs", [f"image:{image_name}#{partition['id']}"])

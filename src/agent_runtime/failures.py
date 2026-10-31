@@ -27,6 +27,10 @@ def _sanitize(value, secret=""):
 def safe_exception_details(exc: BaseException, *, stage: str) -> dict[str, str]:
     """Keep local failure identity while conservatively omitting arbitrary text."""
 
+    # PEP 479 wraps a synchronous tool StopIteration at the coroutine boundary.
+    if type(exc) is RuntimeError and isinstance(exc.__cause__, StopIteration):
+        exc = exc.__cause__
+
     def safe_text(value, fallback):
         try:
             text = str(value)

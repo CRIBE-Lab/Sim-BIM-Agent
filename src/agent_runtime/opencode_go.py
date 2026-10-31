@@ -33,6 +33,8 @@ PROTOCOL_BASE_URLS = {
 # Admitted IDs have model profiles and explicit protocol contracts.
 # Other catalog entries, including experimental IDs, fail before a model request.
 MODELS = {
+    # Go documents this exact OpenAI Chat route; limits follow the upstream Flash contract.
+    "deepseek-v4.1-flash": ("openai_chat_completions", 1_048_576, ("low", "high", "max")),
     "glm-5.3-flash": ("openai_chat_completions", 1_000_000, ("low", "high", "max")),
     "mimo-v2.6-flash": ("openai_chat_completions", 1_048_576, ()),
     # Kimi documents low/high/max; high is admitted after a Go route probe.
@@ -89,6 +91,10 @@ def dns_bootstrap(path):
 
 def parameters(model, *, output_tokens, temperature=None, thinking=True, reasoning_effort=None):
     protocol, _, efforts = model_contract(model)
+    if model == "deepseek-v4.1-flash":
+        from .providers import deepseek_parameters
+        return deepseek_parameters(output_tokens=output_tokens, temperature=temperature,
+            thinking=thinking, reasoning_effort=reasoning_effort)
     if thinking is not True:
         raise ValueError("OpenCode Go uses service reasoning defaults; disabling thinking is not admitted")
     if reasoning_effort is not None and reasoning_effort not in efforts:
@@ -139,7 +145,7 @@ def model_profile(model):
     _, cap, _ = model_contract(model)
     selected = get_model_profile(model, strict=True)
     return replace(selected, context_window_tokens=cap, endpoint_context_window_tokens=cap,
-        context_source=(selected.context_source if model == "mimo-v2.6-flash"
+        context_source=(selected.context_source if model in {"mimo-v2.6-flash", "deepseek-v4.1-flash"}
                         else "https://models.dev/api.json (opencode-go, 2026-10-14)"),
         context_uncertainty="Provider catalog capacity, not an independently saturated endpoint test.",
         text_estimate_offset=0, text_safety_factor=2.0, text_fixed_margin=32,

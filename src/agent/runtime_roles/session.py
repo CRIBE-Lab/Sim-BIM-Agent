@@ -70,11 +70,9 @@ TASK_SCHEMA = schema({
                       "seconds": {"type": "number", "exclusiveMinimum": 0}}),
 }, ("task_id", "role_id", "image", "target"))
 
-# Readers get these per-task allowances, capped by what remains of the run; tokens
-# stay under the run's own total. The coordinator no longer chooses them: in the
-# 10-06 sm24 debug run it guessed 100-120k tokens, while a plan reader alone used
-# ~0.9M and an elevation reader up to ~0.25M, so readers stopped after two or three
-# requests. Measured use: plan reader 19-30 requests, elevation reader up to 8.
+# Reader task allowances are capped by the remaining shared run budget.
+# Tokens remain governed by the root budget; the coordinator cannot allocate
+# an independent token pool to a reader.
 ROLE_TASK_BUDGET = {
     "plan_reader": {"model_calls": 40, "tool_calls": 120, "seconds": 3600},
     "elevation_reader": {"model_calls": 16, "tool_calls": 50, "seconds": 1800},
@@ -352,12 +350,34 @@ class RoleSession:
         structured = raw.get("structuredContent") if isinstance(raw, Mapping) else None
         if not isinstance(structured, Mapping):
             structured = raw if isinstance(raw, Mapping) else {}
+        if payload.outcome == "succeeded":
+            audit = structured.get("receipt_audit")
+            if (not isinstance(audit, Mapping) or audit.get("json_pointer") != ""
+                    or audit.get("receipt_file") != structured.get("receipt_file")
+                    or audit.get("hash_encoding") != "utf-8-json-sort_keys-compact-ensure_ascii_false"
+                    or not isinstance(audit.get("sha256"), str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", audit["sha256"])
+                    or not isinstance(audit.get("receipt_file"), str)):
+                return {"status": "unavailable", "event_id": latest.event_id,
+                        "reason": "The passed trial has no valid complete receipt audit identity."}
+            from .trial import _inside
+            workspace = child.task_directory / "bim/trial_workspace"
+            receipt_path = _inside(workspace, audit["receipt_file"])
+            if not receipt_path.is_file():
+                raise ValueError("event-bound trial receipt is missing")
+            complete = json.loads(receipt_path.read_bytes())
+            if (not isinstance(complete, dict)
+                    or hashlib.sha256(json_bytes(complete)).hexdigest() != audit["sha256"]):
+                raise ValueError("event-bound trial full receipt hash mismatch")
+            for key in ("receipt_file", "status", "plan_sha256", "trial_id", "reading_geometry_ready"):
+                if key in structured and structured[key] != complete.get(key):
+                    raise ValueError(f"trial receipt projection differs from its full receipt: {key}")
+            structured = {**complete, "receipt_audit": audit}
         required = ("receipt_file", "plan_sha256")
         draft_status = "passed" if payload.outcome == "succeeded" else "failed"
         if draft_status == "passed":
             required += ("compiled_numeric_plan_sha256", "candidate")
-            required += (("reading_product_file", "reading_product_sha256") if structured.get("reading_geometry_ready")
-                         else ("candidate_source_sha256",))
+            required += ("reading_product_file", "reading_product_sha256")
         if (structured.get("status") != draft_status
                 or (draft_status == "passed" and not geometry_ready(structured))
                 or any(not isinstance(structured.get(key), str) or not structured[key] for key in required)):
@@ -371,21 +391,14 @@ class RoleSession:
         receipt_hash = {}
         if draft_status == "passed":
             audit = structured.get("receipt_audit")
-            if audit is not None:
-                if (not isinstance(audit, Mapping) or audit.get("json_pointer") != ""
-                        or audit.get("receipt_file") != structured["receipt_file"]
-                        or audit.get("hash_encoding") != "utf-8-json-sort_keys-compact-ensure_ascii_false"
-                        or not isinstance(audit.get("sha256"), str)
-                        or not re.fullmatch(r"[0-9a-f]{64}", audit["sha256"])):
-                    return {"status": "unavailable", "event_id": latest.event_id,
-                            "reason": "The passed trial has no valid complete receipt audit identity."}
-                digest = audit["sha256"]
-            else:
-                # Legacy full captures can prove the entire receipt. A partial
-                # projection cannot match this digest and is rejected on load.
-                digest = hashlib.sha256(json.dumps(structured, ensure_ascii=False, sort_keys=True,
-                    separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
-            receipt_hash["expected_receipt_sha256"] = digest
+            if (not isinstance(audit, Mapping) or audit.get("json_pointer") != ""
+                    or audit.get("receipt_file") != structured["receipt_file"]
+                    or audit.get("hash_encoding") != "utf-8-json-sort_keys-compact-ensure_ascii_false"
+                    or not isinstance(audit.get("sha256"), str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", audit["sha256"])):
+                return {"status": "unavailable", "event_id": latest.event_id,
+                        "reason": "The passed trial has no valid complete receipt audit identity."}
+            receipt_hash["expected_receipt_sha256"] = audit["sha256"]
         return {
             "status": "available", "draft_status": draft_status,
             "event_id": latest.event_id, "sequence": latest.sequence,
@@ -406,7 +419,7 @@ class RoleSession:
                     ("receipt_file", "plan_sha256", "compiled_numeric_plan_sha256")}
         if selection.get("draft_status", selection.get("status")) == "passed":
             identity.update({key: selection[key] for key in
-                             ("candidate", "candidate_source_sha256", "reading_product_file", "reading_product_sha256", "expected_receipt_sha256")
+                             ("candidate", "reading_product_file", "reading_product_sha256", "expected_receipt_sha256")
                              if key in selection})
             _, receipt = prior.verified_unsubmitted_draft(expected_image_sha256, **identity)
         else:
@@ -446,7 +459,7 @@ class RoleSession:
                     "plan_sha256": receipt["plan_sha256"],
                     "receipt_file": receipt["receipt_file"],
                     "compiled_numeric_plan_sha256": receipt.get("compiled_numeric_plan_sha256"),
-                    **({**{key: receipt[key] for key in ("candidate", "candidate_source_sha256", "reading_product_file", "reading_product_sha256") if key in receipt},
+                    **({**{key: receipt[key] for key in ("candidate", "reading_product_file", "reading_product_sha256") if key in receipt},
                         "expected_receipt_sha256": trial_event["expected_receipt_sha256"],
                         "topology_decisions_required": len(receipt.get("topology_issues", []))} if passed else {}),
                     "instruction": (
@@ -547,7 +560,15 @@ class RoleSession:
                     final["delivery_artifact_sha256"] = {file: hashlib.sha256(
                         (self.run_directory / file).read_bytes()).hexdigest()
                         for file in final.get("delivery_artifact_sha256", {})}
-                    result = envelope(final)
+                    # Rebind the full report after role attachments change the
+                    # delivery bytes; stale projection links must not override it.
+                    for key in ("details_file", "details_sha256", "details_read", "report_view"):
+                        final.pop(key, None)
+                    from scripts.tool_scripts.bim_agent_replies import compact_reply
+                    presented = compact_reply(self.run_directory, "finish_bim", final, force=True)
+                    presented.update({key: final[key] for key in
+                        ("candidate", "status", "delivery_artifact_sha256") if key in final})
+                    result = envelope(presented)
                 from scripts.tool_scripts.bim_agent_saved_result import result_metadata
                 meta = {**result_metadata(result), **(result.get("structuredContent") or {})}
                 candidate = meta.get("candidate")
@@ -556,11 +577,6 @@ class RoleSession:
                     if report is not None:
                         result = self._with_assembly_review(result, report)
                 return result
-            if name == "apply_elevation_heights" and isinstance(arguments, dict):
-                # The former confirm flag carried nothing beyond match_id; GLM's
-                # Anthropic-compatible route sent it as the string "true" (10-06 sm24
-                # debug run2), so tolerate and drop it rather than block heights.
-                arguments = {key: value for key, value in arguments.items() if key != "confirm"}
             arguments = normalize_stringified_parameters(arguments, self.schemas[name])
             if name == "delegate_readers":
                 _validate_task_instructions(arguments.get("tasks"))
@@ -894,8 +910,7 @@ class RoleSession:
         return task
 
     def _with_plan_floors(self, tasks, *, add_missing=False):
-        """A facade target without floors names the plan floors (10-07 run4: a bare
-        "South" reader invented floor "GF", which no plan floor matched)."""
+        """Bind a facade target to the declared plan floors when floors are omitted."""
         from .submission import canonical_target
         tasks = [dict(task) if isinstance(task, dict) else task for task in tasks]
         auto_added = []
@@ -1084,16 +1099,10 @@ class RoleSession:
                     compiled_plan = prior.numeric_plan(prior_receipt)
                     if not isinstance(compiled_plan, dict):
                         raise ValueError("verified compiled rework plan is not a JSON object")
-                    compiled_delivery = previous["plan"] == compiled_plan
-                    if (not compiled_delivery
-                            and canonical_plan_sha256(previous["plan"]) != validation["plan_sha256"]):
+                    if previous["plan"] != compiled_plan:
                         raise ValueError("rework artifact differs from its successful trial")
                     trial.inherit_reference(prior, validation["plan_sha256"], task["rework_targets"])
-                    # Current deliveries contain the effective compiled plan
-                    # and continue from it. Legacy deliveries contain the
-                    # original declaration and retain their historical base.
-                    if compiled_delivery:
-                        trial.reference_plan = copy.deepcopy(compiled_plan)
+                    trial.reference_plan = copy.deepcopy(compiled_plan)
                 elif prior_record.get("status") == "failed":
                     editable = (task.get("previous_task_handoff") or {}).get("editable_draft")
                     if editable:
@@ -1105,7 +1114,7 @@ class RoleSession:
                                 "submission_accepted": False,
                                 "topology_decisions_required": len(recovered.get("topology_issues", [])),
                                 **{key: recovered[key] for key in
-                                   ("compiled_numeric_plan_sha256", "candidate", "candidate_source_sha256", "reading_product_file", "reading_product_sha256") if key in recovered},
+                                   ("compiled_numeric_plan_sha256", "candidate", "reading_product_file", "reading_product_sha256") if key in recovered},
                             })
                         else:
                             trial.inherit_failed_reference(
@@ -1139,20 +1148,26 @@ class RoleSession:
                       "parameters": t["inputSchema"]}} for t in catalog]
             versions = make_versions(child, root=self.root, prompt=guide, tools=specs, parameters=parameters,
                                      route=route, code_paths=("src/agent/runtime_roles", "src/agent/runtime_tools.py"))
-            from .reader_context import previous_artifact_context
-            previous_context = previous_artifact_context(
-                previous, role_id=task["role_id"], artifact_reference=task.get("previous_artifact")
-            )
-            from .plan_views import initial_coordinate_view
-            initial_image, initial_view = initial_coordinate_view(raw_image, image_name=task["image"], directory=scoped.run_directory)
-            tools._remember_references({"structuredContent": {"evidence_previews": [initial_view]}})
-            content = [{"type": "text", "text": json.dumps({"task": task, "previous_artifact": previous_context,
-                       "input": {"image": task["image"], "original_size": list(size), "sha256": task["input_sha256"]},
-                       "initial_view": initial_view,
-                       "coordinates": ELEVATION_COORDINATES if task["role_id"] == "elevation_reader"
-                       else READER_COORDINATES[task["role_id"]]}, ensure_ascii=False)},
-                       {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(initial_image).decode(),
-                                                             "detail": "original"}}]
+            messages, image_originals = [], {}
+            if not child.events:
+                from .reader_context import previous_artifact_context
+                previous_context = previous_artifact_context(
+                    previous, role_id=task["role_id"], artifact_reference=task.get("previous_artifact")
+                )
+                from .plan_views import initial_coordinate_view
+                initial_image, initial_view = initial_coordinate_view(raw_image, image_name=task["image"], directory=scoped.run_directory)
+                tools._remember_references({"structuredContent": {"evidence_previews": [initial_view]}})
+                content = [{"type": "text", "text": json.dumps({"task": task, "previous_artifact": previous_context,
+                           "input": {"image": task["image"], "original_size": list(size), "sha256": task["input_sha256"]},
+                           "initial_view": initial_view,
+                           "coordinates": ELEVATION_COORDINATES if task["role_id"] == "elevation_reader"
+                           else READER_COORDINATES[task["role_id"]]}, ensure_ascii=False)},
+                           {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(initial_image).decode(),
+                                                                 "detail": "original"}}]
+                messages = [{"role": "system", "content": guide}, {"role": "user", "content": content}]
+                image_originals = {hashlib.sha256(initial_image).hexdigest(): child.put_bytes(raw_image, "image/png")}
+            # Resume restores the original messages and image lineage from the
+            # checkpoint. Reissuing a view here would change its saved tool state.
             adapter = self.adapter_factory(task["task_id"], config, child)
             if hasattr(adapter, "close"):
                 stack.push_async_callback(adapter.close)
@@ -1166,9 +1181,7 @@ class RoleSession:
                 context_policy=context_policy_from_effective(task["role_id"], effective_context),
                 request_timeout_seconds=self.limits.seconds / (self.max_concurrent_readers + 1),
                 fault_hook=self.reader_fault_hook)
-            original_ref = child.put_bytes(raw_image, "image/png")
-            runtime = await engine.run([{"role": "system", "content": guide}, {"role": "user", "content": content}],
-                image_originals={hashlib.sha256(initial_image).hexdigest(): original_ref}, resume=bool(child.events))
+            runtime = await engine.run(messages, image_originals=image_originals, resume=bool(child.events))
             if task["role_id"] == "plan_reader":
                 runtime["plan_reader_progress"] = tools.progress(started_epoch=runtime.get("started_epoch"))
                 child.write_json("receipt.json", runtime)
@@ -1185,13 +1198,20 @@ class RoleSession:
                                       validation=submitted["validation"] if accepted else None,
                                       reason=runtime["status"] if artifact is None else None)
 
-    async def _once(self, operation_id, name, arguments, *, reference):
+    def _recorded_operation(self, operation_id, name, arguments, *, reference):
         digest = hashlib.sha256(operation_id.encode()).hexdigest()
         path = self.store.directory / "role_operations" / (digest + ".json")
-        if path.is_file():
-            saved = json.loads(path.read_bytes())
-            if (saved["tool"], saved["arguments"], saved["reference"]) != (name, arguments, reference):
-                raise ValueError("operation identity already refers to different arguments")
+        if not path.is_file():
+            return path, None
+        saved = json.loads(path.read_bytes())
+        if (saved["operation_id"], saved["tool"], saved["arguments"], saved["reference"]) != (
+                operation_id, name, arguments, reference):
+            raise ValueError("operation identity already refers to different arguments")
+        return path, saved
+
+    async def _once(self, operation_id, name, arguments, *, reference):
+        path, saved = self._recorded_operation(operation_id, name, arguments, reference=reference)
+        if saved is not None:
             if "result" not in saved:
                 raise ValueError("operation outcome unknown; cannot repeat a possible model write")
             return saved["result"]
@@ -1219,34 +1239,35 @@ class RoleSession:
             self.assembly.guard()
             return await self._build_from_artifact(task_id, sha256, **levels)
 
-    async def _build_from_artifact(self, task_id, sha256, resolved_levels=None, elevation_readings=None, **levels):
+    async def _build_from_artifact(self, task_id, sha256, resolved_levels=None, elevation_readings=None,
+                                   *, _recover_only=False, **levels):
         value = self.registry.read(task_id, sha256=sha256, role_id="plan_reader")
         record = self.registry.records[task_id]
         if not record.get("validation", {}).get("validation_passed"):
             raise ValueError("plan delivery has no successful trial receipt")
         plan = value["plan"]
         receipt = record["validation"]
-        if receipt.get("compiled_numeric_plan_file"):
-            from .trial import canonical_plan_sha256
-            workspace = self.registry.child(task_id).task_directory / "bim/trial_workspace"
-            path = (workspace / receipt["compiled_numeric_plan_file"]).resolve()
-            if not path.is_relative_to(workspace.resolve()) or not path.is_file():
-                raise ValueError("compiled reader plan is outside its trial or missing")
-            raw = path.read_bytes()
-            if hashlib.sha256(raw).hexdigest() != receipt["compiled_numeric_plan_sha256"]:
-                raise ValueError("compiled reader plan hash mismatch")
-            compiled = json.loads(raw)
-            if not isinstance(compiled, dict):
-                raise ValueError("compiled reader plan is not a JSON object")
-            if plan != compiled and canonical_plan_sha256(plan) != receipt["plan_sha256"]:
-                raise ValueError("trial receipt does not refer to this original or verified compiled plan")
-            plan = compiled
+        if not receipt.get("compiled_numeric_plan_file"):
+            raise ValueError("plan delivery requires its saved compiled reader plan")
+        workspace = self.registry.child(task_id).task_directory / "bim/trial_workspace"
+        path = (workspace / receipt["compiled_numeric_plan_file"]).resolve()
+        if not path.is_relative_to(workspace.resolve()) or not path.is_file():
+            raise ValueError("compiled reader plan is outside its trial or missing")
+        raw = path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != receipt["compiled_numeric_plan_sha256"]:
+            raise ValueError("compiled reader plan hash mismatch")
+        compiled = json.loads(raw)
+        if not isinstance(compiled, dict):
+            raise ValueError("compiled reader plan is not a JSON object")
+        if plan != compiled:
+            raise ValueError("plan delivery differs from its verified compiled reader plan")
+        plan = compiled
         from .levels import apply_levels, apply_resolved_levels
         if resolved_levels is None:
             plan, citations = apply_levels(self.registry, plan, **levels)
         else:
             if levels:
-                raise ValueError("choose resolved levels or explicit legacy overrides")
+                raise ValueError("choose resolved levels or explicit cited overrides")
             plan, citations = apply_resolved_levels(plan, resolved_levels), resolved_levels
             levels = {"resolved_levels": resolved_levels}
         materialization = []
@@ -1259,6 +1280,8 @@ class RoleSession:
                 plan, materialization = materialize_plan_reading(plan, elevations=elevation_readings or {},
                     image_size=image_size, image_name=record["image"])
             except PlanMaterializationError as error:
+                if _recover_only:
+                    return None
                 return envelope({"status": "assembly_conflict", "source_geometry_ready": False,
                     "reason": str(error), "materialization": error.decisions}, error=True)
             # Include accepted elevation identity in _once so new evidence cannot
@@ -1267,9 +1290,15 @@ class RoleSession:
         reference = {"task_id": task_id, "sha256": sha256}
         if citations:
             reference["levels"] = citations
-        result = await self._once(self._build_identity(task_id, levels), "build_plan_bim",
-            {"image": record["image"], "plan_json": json.dumps(plan, ensure_ascii=False)},
-            reference=reference)
+        identity = self._build_identity(task_id, levels)
+        arguments = {"image": record["image"], "plan_json": json.dumps(plan, ensure_ascii=False)}
+        if _recover_only:
+            _, saved = self._recorded_operation(identity, "build_plan_bim", arguments, reference=reference)
+            if saved is None or "result" not in saved:
+                return None
+            result = saved["result"]
+        else:
+            result = await self._once(identity, "build_plan_bim", arguments, reference=reference)
         if materialization:
             result = copy.deepcopy(result)
             result.setdefault("structuredContent", {})["materialization"] = materialization
@@ -1381,25 +1410,21 @@ class RoleSession:
                     continue
             elif call.tool_name in {"build_from_artifact", "apply_elevation_heights"}:
                 if call.tool_name == "build_from_artifact":
-                    levels = {k: v for k, v in call.full_arguments.items() if k not in {"task_id", "sha256"}}
-                    identity = self._build_identity(call.full_arguments["task_id"], levels)
-                    path = self.store.directory / "role_operations" / (hashlib.sha256(identity.encode()).hexdigest() + ".json")
-                    if not path.is_file() or "result" not in json.loads(path.read_bytes()):
+                    # Rebuild the exact prepared identity, including materialized
+                    # elevation evidence, without permitting a missing write.
+                    raw = await self._build_from_artifact(**call.full_arguments, _recover_only=True)
+                    if raw is None:
                         continue
-                    saved_result = json.loads(path.read_bytes())["result"]
                 else:
                     from .height_writes import match_ids, load_match, saved_application
                     ids = sorted({load_match(self, identity)["match_id"] for identity in match_ids(call.full_arguments["match_id"])})
                     saved = saved_application(self, ids)
                     if saved is None:
                         continue
-                    saved_result = saved["result"]
+                    raw = saved["result"]
                 # A process may die after the frozen build receipt was saved but
                 # before its reader binding/comparison. Complete that read-only
-                # bookkeeping from the receipt; _once will never rebuild it.
-                raw = (await self._build_from_artifact(**call.full_arguments)
-                       if call.tool_name == "build_from_artifact"
-                       else saved_result)
+                # bookkeeping from the receipt without repeating the build.
             else:
                 continue
             _, _, shown, _ = convert_tool_result(call.call_id, raw, self.store)

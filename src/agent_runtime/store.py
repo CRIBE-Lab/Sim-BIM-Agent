@@ -27,8 +27,8 @@ def replace_file(source, target) -> None:
     """os.replace that rides out brief Windows sharing violations.
 
     Windows refuses to replace a file another process holds open (search
-    indexer, scanners); in 10-07 sm24 run4 one such PermissionError on a
-    reader's checkpoint.json ended that elevation reader. Retry briefly.
+    indexer, scanners). Retry these transient sharing violations briefly before
+    reporting a persistent write failure.
     """
     for delay in (0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.0):
         try:

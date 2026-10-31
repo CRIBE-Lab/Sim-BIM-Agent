@@ -1,8 +1,7 @@
-"""Validate or start an approved whole-case configuration.
+"""Validate a building task or launch its selected native runtime.
 
-This module performs no model call for ``check`` or ``command``.  ``launch``
-execs the reviewed runtime entry exactly once and is intended only after the
-separate whole-case approval recorded by the project lead.
+Configuration checking and command inspection never send model requests.
+Launching runs the user-selected drawing or mesh workflow exactly once.
 """
 
 from __future__ import annotations
@@ -21,13 +20,12 @@ from src.agent_runtime.output_limits import validate_output_limit
 from src.agent_runtime.accounting import require_cny_price_schedule
 from src.agent_runtime.loop import RunLimits
 from src.agent_runtime.run_paths import resolve_run_output
-from src.agent_runtime.providers import CHATGPT_SUBSCRIPTION, SUBSCRIPTION_PROVIDERS, LIVE_PROVIDERS, provider_parameters, validate_provider_model
+from src.agent_runtime.providers import CHATGPT_SUBSCRIPTION, SUBSCRIPTION_PROVIDERS, LIVE_PROVIDERS, provider_parameters, validate_provider_model, is_deepseek_route
 from src.agent.runtime_roles.config import load_roles
 
 
 ALLOWED_ENTRYPOINTS = {
     "single_model": "src.agent.runtime_entry",
-    "external_coordinator_mcp": "src.agent.runtime_coordinator",
     "role_division": "src.agent.runtime_roles.entry",
 }
 PRODUCT_RUN_MODES = ("single_model", "role_division")
@@ -36,14 +34,10 @@ PRODUCT_RUN_MODES = ("single_model", "role_division")
 def entrypoint_for(mode: str) -> str:
     if mode not in ALLOWED_ENTRYPOINTS:
         raise ValueError(f"unsupported run mode {mode!r}")
-    from src.agent_runtime.agent_registry import REGISTRY_RELATIVE_PATH, load_agent_registry
-    if (ROOT / REGISTRY_RELATIVE_PATH).is_file() and load_agent_registry(ROOT).get("product_projection"):
-        if mode not in PRODUCT_RUN_MODES:
-            raise ValueError(f"run mode {mode!r} is not included in this Sim-BIM product")
-        entrypoint = ALLOWED_ENTRYPOINTS[mode]
-        if not (ROOT / (entrypoint.replace(".", "/") + ".py")).is_file():
-            raise ValueError(f"installed product entrypoint is missing: {entrypoint}")
-    return ALLOWED_ENTRYPOINTS[mode]
+    entrypoint = ALLOWED_ENTRYPOINTS[mode]
+    if not (ROOT / (entrypoint.replace(".", "/") + ".py")).is_file():
+        raise ValueError(f"installed runtime entrypoint is missing: {entrypoint}")
+    return entrypoint
 
 
 def mesh_worker_concurrency(case: dict) -> int:
@@ -134,6 +128,13 @@ def resolve_supplemental_inputs(case: dict) -> tuple[Path | None, Path | None]:
 
 def load_configuration(path: Path, *, low_output_limit_reason: str | None = None) -> dict:
     value = json.loads(path.read_bytes())
+    if not isinstance(value, dict):
+        raise ValueError("configuration must be a JSON object")
+    missing = {"batch_id", "maximum_seconds_per_case", "cases"} - value.keys()
+    if missing:
+        raise ValueError("configuration is missing required fields: " + ", ".join(sorted(missing)))
+    if not isinstance(value["batch_id"], str) or not value["batch_id"].strip():
+        raise ValueError("batch_id must be a nonempty string")
     if value.get("schema_version") != 1:
         raise ValueError("unsupported run configuration schema")
     if not value.get("approval_required_before_launch"):
@@ -141,6 +142,27 @@ def load_configuration(path: Path, *, low_output_limit_reason: str | None = None
     cases = value.get("cases")
     if not isinstance(cases, list) or not cases:
         raise ValueError("configuration needs at least one case")
+    string_fields = ("case_id", "mode", "provider", "model", "input_kind", "image_kind",
+                     "input", "output", "scope")
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            raise ValueError(f"cases[{index}] must be a JSON object")
+        for name in string_fields:
+            if not isinstance(case.get(name), str) or not case[name].strip():
+                raise ValueError(f"cases[{index}].{name} must be a nonempty string")
+        for name in ("output_tokens", "max_candidates"):
+            if type(case.get(name)) is not int or case[name] <= 0:
+                raise ValueError(f"cases[{index}].{name} must be a positive integer")
+        limits = case.get("limits")
+        if not isinstance(limits, dict):
+            raise ValueError(f"cases[{index}].limits must be a JSON object")
+        missing_limits = {"model_calls", "tool_calls", "seconds"} - limits.keys()
+        if missing_limits:
+            raise ValueError(f"cases[{index}].limits is missing: " + ", ".join(sorted(missing_limits)))
+        for name in ("input_root", "run_root"):
+            configured = case.get(name, value.get(name))
+            if configured is not None and (not isinstance(configured, str) or not configured.strip()):
+                raise ValueError(f"{name} must be a nonempty directory path")
     identities = [case.get("case_id") for case in cases]
     if len(set(identities)) != len(identities) or not all(identities):
         raise ValueError("case IDs must be present and unique")
@@ -162,7 +184,10 @@ def load_configuration(path: Path, *, low_output_limit_reason: str | None = None
                 raise ValueError("reader_task requires role_division without whole-run continuation")
             import jsonschema
             from src.agent.runtime_roles.session import TASK_SCHEMA
-            jsonschema.validate(case["reader_task"], TASK_SCHEMA)
+            try:
+                jsonschema.validate(case["reader_task"], TASK_SCHEMA)
+            except jsonschema.ValidationError as error:
+                raise ValueError(f"reader_task: {error.message}") from error
         if continuation is not None:
             import re
             mesh_continuation = mode == "single_model" and case.get("input_kind") == "mesh"
@@ -193,13 +218,7 @@ def load_configuration(path: Path, *, low_output_limit_reason: str | None = None
             raise ValueError("reasoning_history currently supports single_model only")
         if case.get("provider") not in LIVE_PROVIDERS:
             raise ValueError("live configuration requires a reviewed provider")
-        if mode == "external_coordinator_mcp" and case["provider"] == CHATGPT_SUBSCRIPTION:
-            raise ValueError("ChatGPT subscription supports single_model and role_division; external_coordinator_mcp is not supported")
-        if mode == "external_coordinator_mcp" and case["provider"] == "opencode-go":
-            raise ValueError("OpenCode Go supports single_model and role_division only")
-        if mode == "external_coordinator_mcp" and case["provider"] == "deepseek":
-            raise ValueError("DeepSeek supports single_model and role_division only")
-        if case["provider"] == "deepseek" and case.get("reasoning_history", "all") != "all":
+        if is_deepseek_route(case["provider"], case.get("model")) and case.get("reasoning_history", "all") != "all":
             raise ValueError("DeepSeek requires reasoning_history=all")
         if case["provider"] == CHATGPT_SUBSCRIPTION and case.get("reasoning_history", "all") != "all":
             raise ValueError("ChatGPT subscription requires reasoning_history=all")
@@ -377,13 +396,6 @@ def argv_for(case: dict, *, resume: bool = False) -> list[str]:
         for name in ("temperature", "reasoning_effort"):
             if case.get(name) is not None:
                 argv += ["--" + name.replace("_", "-"), str(case[name])]
-    elif case["mode"] == "external_coordinator_mcp":
-        if case.get("reasoning_effort") is not None:
-            argv += ["--reasoning-effort", case["reasoning_effort"]]
-        argv += ["--quota-journal", str(ROOT / case["quota_journal"]),
-                 "--quota-limit", str(case["quota_limit"]),
-                 "--max-concurrent-observers", str(case["max_concurrent_observers"])]
-        argv.append("--thinking" if case.get("thinking", True) else "--no-thinking")
     else:
         roles = load_roles(case.get("roles"))
         argv += ["--roles-json", json.dumps(
@@ -412,16 +424,20 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--low-output-limit-reason", help="record a reason without editing a historical configuration")
     args = parser.parse_args()
-    configuration = load_configuration(args.configuration.resolve(), low_output_limit_reason=args.low_output_limit_reason)
+    if args.action != "check" and not args.case:
+        parser.error("--case is required for command or launch")
+    try:
+        configuration = load_configuration(args.configuration.resolve(), low_output_limit_reason=args.low_output_limit_reason)
+        command = (argv_for(selected_case(configuration, args.case), resume=args.resume)
+                   if args.action != "check" else None)
+    except (OSError, ValueError) as error:
+        print(json.dumps({"status": "error", "message": str(error)}, ensure_ascii=False))
+        raise SystemExit(1) from None
     if args.action == "check":
         print(json.dumps({"status": "ready", "batch_id": configuration["batch_id"],
                           "cases": [case["case_id"] for case in configuration["cases"]]},
                          ensure_ascii=False))
         return
-    if not args.case:
-        parser.error("--case is required for command or launch")
-    case = selected_case(configuration, args.case)
-    command = argv_for(case, resume=args.resume)
     if args.action == "command":
         # Printed commands are for the host shell; launch itself always uses argv.
         print("& " + " ".join("'" + value.replace("'", "''") + "'" for value in command)

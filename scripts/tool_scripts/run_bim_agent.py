@@ -1,9 +1,8 @@
-"""Small subscription-driven BIM experiment; no legacy flow or solver stages.
+"""Sim-BIM tool implementations and their MCP server.
 
-The model sees an explicit image inventory, an optional frozen user building
-declaration, and the tools below. MCP owns file access and geometry execution;
-the model has no shell/repository tools. This is an experimental entry point,
-not a complete product orchestrator.
+The working model receives the input inventory, optional user declarations and
+BIM tools. MCP manages file access and geometry execution. The same tools serve
+the drawing and textured-mesh runtime entries.
 """
 from __future__ import annotations
 
@@ -17,11 +16,7 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
-import subprocess
 import sys
-import tempfile
-import threading
 import time
 from typing import Literal
 
@@ -33,8 +28,7 @@ from mcp.server.fastmcp import Image
 from mcp.types import CallToolResult, TextContent
 
 
-from scripts.tool_scripts.bim_agent_guidance import REFERENCES, build_guide, filter_tool_catalog, tool_capabilities
-from scripts.tool_scripts.bim_agent_inputs import freeze_building_input, freeze_plan_input
+from scripts.tool_scripts.bim_agent_guidance import REFERENCES, build_guide
 from scripts.tool_scripts.bim_agent_feedback import ImageFilename
 
 
@@ -132,7 +126,7 @@ def _profile_support_peaks(counts, offset):
 
 
 def _profile_positive_runs(counts, offset):
-    """Preserve the legacy unthresholded runs and every local maximum plateau."""
+    """Preserve unthresholded runs and every local maximum plateau."""
     rows = []
     for start, end in _inclusive_runs(counts > 0):
         peak = start + int(counts[start:end + 1].argmax())
@@ -204,352 +198,22 @@ def coordinate_grid_view(pic, region):
                  "note":"Blue dotted grid/white labels are viewing aids, not drawing evidence."}
 
 
-def terminate_subscription(process):
-    """Stop this invocation and nested review sessions, including their MCPs."""
-    if os.name == "nt":
-        # Scope termination to this invocation's PID and its descendants.
-        if process.poll() is None:
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           check=False, timeout=15)
-        process.wait(timeout=15)
-        return
-    rows = subprocess.check_output(["ps", "-eo", "pid=,ppid="], text=True)
-    parents = {int(pid): int(parent) for pid, parent in (row.split() for row in rows.splitlines())}
-    descendants = {process.pid}
-    while True:
-        expanded = descendants | {pid for pid, parent in parents.items() if parent in descendants}
-        if expanded == descendants:
-            break
-        descendants = expanded
-    groups = set()
-    for pid in descendants:
-        try:
-            group = os.getpgid(pid)
-            if group != os.getpgrp():
-                groups.add(group)
-        except ProcessLookupError:
-            pass
-    for group in groups:
-        try:
-            os.killpg(group, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        for group in groups:
-            try:
-                os.killpg(group, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        process.wait()
-
-
 def run_guide(run: Path) -> str:
     """System prompt matching the run's admitted inputs and declared image kind."""
     manifest = json.loads((run / "inputs.json").read_bytes())
     mesh = bool(manifest.get("mesh_input"))
     kind = manifest.get("image_kind") or (("unknown" if mesh else "drawings") if manifest.get("images") else None)
-    guide = build_guide(images=kind, mesh=mesh, **tool_capabilities(manifest))
+    guide = build_guide(images=kind, mesh=mesh)
     if manifest.get("drawing_review_policy"):
         from scripts.tool_scripts.bim_agent_guidance import DRAWING_PROCESS
         guide += "\n" + DRAWING_PROCESS
     return guide
 
 
-MAIN_MODELS = ("claude-sonnet-5", "claude-sonnet-5-5")
-WORKER_MODELS = {"haiku": "claude-haiku-4-5-20251001"}
-WORKER_AGENT = "worker"
-# Built-in Claude Code subagents run on other models; a worker run allows only WORKER_AGENT.
-BUILTIN_AGENTS = ("claude", "claude-code-guide", "Explore", "general-purpose", "Plan", "statusline-setup")
-
-
-def worker_agents(run: Path, workers: str) -> str:
-    """Claude Code --agents JSON: one worker with this run's tools and guide."""
-    prompt = ("You are a worker delegated by the coordinating model of this BIM run. Do only the "
-              "delegated sub-task with the BIM tools, keep to its floor, facade or objects, and do not "
-              "call finish_bim. Report results the coordinator can verify: draft or candidate ids, "
-              "values with their original-pixel evidence, and anything unresolved.\n\n" + run_guide(run))
-    return json.dumps({WORKER_AGENT: {
-        "description": ("Claude Haiku 4.5 worker with this run's BIM tools and inputs. Give it one "
-                        "self-contained sub-task, e.g. read one floor plan and build it, or read one "
-                        "elevation's opening positions and heights. Several calls in one message run "
-                        "in parallel. It cannot delegate further."),
-        "prompt": prompt, "model": WORKER_MODELS[workers]}}, ensure_ascii=False)
-
-
-def subscription(run: Path, prompt: str, *, model: str, name: str,
-                 readonly: bool = False, timeout: int = 900,
-                 log_run: Path | None = None, receipt_context: dict | None = None,
-                 effort: str | None = None, exploratory_opus: bool = False,
-                 main_model: str | None = None, workers: str | None = None):
-    """Only the logged-in subscription; isolated cwd/env, explicit MCP tools.
-
-    ``run`` is the MCP-visible workspace. ``log_run`` can retain a child
-    observation's request, stream and receipt alongside its parent run.
-    ``main_model`` and ``workers`` apply to the Claude main Sonnet call only.
-    """
-    if effort not in {None, "low", "medium"}:
-        raise ValueError("effort must be low or medium when supplied")
-    if model == "haiku" and effort is not None:
-        raise ValueError("explicit effort is supported only for sonnet in this experiment")
-    if model not in ({"sonnet", "haiku", "opus"} if exploratory_opus else {"sonnet", "haiku"}):
-        raise ValueError("only configured subscription aliases are allowed")
-    run = run.resolve()
-    log_run = (log_run or run).resolve()
-    manifest = json.loads((run / "inputs.json").read_bytes())
-    provider = manifest.get("provider", "claude")
-    if provider not in {"claude", "glm"}:
-        raise ValueError("unsupported subscription provider")
-    if provider == "glm" and exploratory_opus:
-        raise ValueError("GLM routing cannot be combined with exploratory Opus")
-    if (main_model or workers) and (provider != "claude" or model != "sonnet" or readonly):
-        raise ValueError("main_model and workers apply only to the Claude main Sonnet invocation")
-    if main_model is not None and main_model not in MAIN_MODELS:
-        raise ValueError("main_model must be one of " + ", ".join(MAIN_MODELS))
-    if workers is not None and workers not in WORKER_MODELS:
-        raise ValueError("workers must be one of " + ", ".join(WORKER_MODELS))
-    from src.agent.execution.subscription_json import _isolated_env, _redact_secrets, subscription_model_id
-    routed_model = "glm-5.3-flash" if provider == "glm" else (main_model or subscription_model_id(model))
-    launcher = ([sys.executable, str(ROOT / "scripts/glm_code.py")] if os.name == "nt"
-                else [str(ROOT / "scripts/glm_code.sh")]) if provider == "glm" else ["claude"]
-    command = [*launcher, "-p", "--model", routed_model,
-               "--tools", "Agent" if workers else "",
-               "--allowedTools", f"mcp__bim__*,Agent({WORKER_AGENT})" if workers else "mcp__bim__*",
-               *(["--disallowedTools", ",".join(f"Agent({agent})" for agent in BUILTIN_AGENTS),
-                  "--agents", worker_agents(run, workers)] if workers else []),
-               "--permission-mode", "dontAsk",
-               "--strict-mcp-config", "--setting-sources", "",
-               "--settings", '{"disableAllHooks":true}',
-               "--no-session-persistence", "--output-format", "stream-json", "--verbose",
-               "--system-prompt", ("Answer only the supplied local visual question using tools. "
-                                    "Inspect a suitable crop; cite original pixel locations of marks. "
-                                    "Separate door arcs, gaps and dimension ticks. State uncertainty; "
-                                    "For line evidence, compare both profile axes; peak support at a junction "
-                                    "is not a whole wall's extent or thickness. Inspect beyond both ends "
-                                    "and trace adjoining space boundaries before calling an endpoint free. "
-                                    "do not infer a connection just because rooms are adjacent. "
-                                    "For dimension labels, use a magnified clean crop and bind each "
-                                    "transcription to its actual label box, dimension line and adjacent "
-                                    "extension endpoints in original pixels. Keep different chains separate. "
-                                    "Use map_dimension_chain only after transcription. If arithmetic or "
-                                    "the claimed endpoints conflict, recheck that local evidence once, then "
-                                    "report unknown instead of inventing a missing segment. "
-                                    "Check inputs or view_image metadata for remaining_seconds, answer early, "
-                                    "and near the limit state explicit unexamined items. Do not plan the whole building."
-                                    if readonly else run_guide(run))]
-    if not readonly or model == "sonnet":
-        command.extend(["--effort", effort or "medium"])
-    server = [sys.executable, str(Path(__file__).resolve()), "serve", str(run), "--enabled-only"]
-    if readonly:
-        server.append("--readonly")
-    command.extend(["--mcp-config", json.dumps({"mcpServers": {"bim": {
-        "command": server[0], "args": server[1:], "alwaysLoad": True}}})])
-    started = time.monotonic()
-    from src.agent_runtime.versions import external_run_identity
-    role_models = {"local_observer" if readonly else "coordinator": {
-        "route_id": f"{provider}-subscription-claude-code", "model": routed_model,
-        "reasoning_effort": (effort or "medium") if not readonly or model == "sonnet" else None,
-        "output_tokens": None, "output_limit_source": "client_default_not_exposed",
-        "parameters": {"effort": (effort or "medium") if not readonly or model == "sonnet" else None}}}
-    if workers:
-        role_models[WORKER_AGENT] = {"route_id": "claude-subscription-claude-code",
-            "model": WORKER_MODELS[workers], "reasoning_effort": None, "output_tokens": None,
-            "output_limit_source": "client_default_not_exposed", "parameters": {}}
-    version_identity = external_run_identity(ROOT, mode="single_model", role_models=role_models)
-    record = {"requested_model": routed_model, "requested_role": model, "provider": provider,
-              **version_identity,
-              "channel": f"{provider} subscription; no paid API/fallback",
-              "readonly": readonly, "timeout_seconds": timeout,
-              "exploratory_opus": exploratory_opus,
-              "effort": (effort or "medium") if not readonly or model == "sonnet" else None}
-    if workers:
-        record.update(workers=workers, worker_model=WORKER_MODELS[workers])
-    if receipt_context:
-        record.update(receipt_context)
-    # Caller context cannot override the verified identity. This sidecar and
-    # request/receipt retain the same invocation-specific version/configuration.
-    record.update(version_identity)
-    dump(log_run / f"{name}_versions.json", version_identity)
-    dump(log_run / f"{name}_request.json", {**record, "prompt": prompt,
-                                       "system_prompt": command[command.index("--system-prompt")+1]})
-    stdout_path, stderr_path = log_run / f"{name}_stream.jsonl", log_run / f"{name}_stderr.log"
-    with tempfile.TemporaryDirectory(prefix="bim-agent-cwd-") as cwd:
-        with stdout_path.open("x") as stdout, stderr_path.open("x") as stderr:
-            # No CLI side calls (title/summary Haiku, updater) inside a measured run.
-            env = {**_isolated_env(), "ENABLE_TOOL_SEARCH": "false",
-                   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
-            if provider == "glm":
-                env.update(GLM_MODEL=routed_model, GLM_SMALL_MODEL=routed_model)
-            deadline = manifest.get("deadline_epoch")
-            if deadline is not None and deadline <= time.time():
-                record.update(timed_out=True, model_process_started=False)
-            else:
-                process = subprocess.Popen(command, cwd=cwd, env=env,
-                                           stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
-                                           text=True, start_new_session=True)
-                try:
-                    available = min(timeout, max(0, deadline - time.time())) if deadline else timeout
-                    process.communicate(prompt, timeout=available)
-                    record["returncode"] = process.returncode
-                except subprocess.TimeoutExpired:
-                    terminate_subscription(process)
-                    record["timed_out"] = True
-    for path in (stdout_path, stderr_path):
-        path.write_text(_redact_secrets(path.read_text()))
-    record["elapsed_seconds"] = round(time.monotonic() - started, 2)
-    for line in stdout_path.read_text().splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "system" and event.get("subtype") == "init":
-            record["actual_model"] = event.get("model")
-        if event.get("type") == "result":
-            record["result"] = event
-    if provider == "glm" and record.get("actual_model") != routed_model:
-        record["routing_error"] = "GLM invocation did not confirm the requested image model"
-    if provider == "claude" and model == "sonnet":
-        used_models = record.get("result", {}).get("modelUsage", {})
-        allowed = {routed_model} | ({WORKER_MODELS[workers]} if workers else set())
-        if record.get("actual_model") != routed_model or any(used not in allowed for used in used_models):
-            record["routing_error"] = f"Claude invocation did not stay on {' and '.join(sorted(allowed))}"
-    dump(log_run / f"{name}_receipt.json", record)
-    return record
-
-
-DETAIL_MAX_TIMEOUT_SECONDS = 240
-DETAIL_COMPLETION_RESERVE_SECONDS = 45
-DETAIL_MIN_TIMEOUT_SECONDS = 15
-DETAIL_OBSERVATION_LOCK = threading.Lock()
-
-
-def prepare_detail_observation(
-        toolkit: "Toolkit", question: str, images: list[str], name: str, *,
-        timeout_seconds: float | None = None, deadline_epoch: float | None = None):
-    """Make one immutable, image-only MCP workspace for a local observation."""
-    if not isinstance(question, str) or not question.strip():
-        raise ValueError("local review question must be non-empty")
-    if not images:
-        raise ValueError("choose at least one original image for local review")
-    if len(set(images)) != len(images):
-        raise ValueError("choose each local review image only once")
-    if timeout_seconds is not None and deadline_epoch is not None:
-        raise ValueError("choose either timeout_seconds or deadline_epoch for local review")
-    if timeout_seconds is not None:
-        if timeout_seconds <= 0:
-            raise ValueError("local review timeout_seconds must be positive")
-        deadline_epoch = time.time() + timeout_seconds
-    if deadline_epoch is not None and deadline_epoch <= time.time():
-        raise ValueError("local review deadline_epoch must be in the future")
-    sources = {image: toolkit.image_path(image) for image in images}
-    child = toolkit.run / name
-    child.mkdir(exist_ok=False)
-    child_images = child / "images"
-    child_images.mkdir()
-    selected = {}
-    for image, source in sources.items():
-        target = child_images / image
-        shutil.copy2(source, target)
-        with PILImage.open(target) as picture:
-            size = list(picture.size)
-        selected[image] = {"size": size, "sha256": digest(target)}
-        if selected[image]["sha256"] != toolkit.manifest["images"][image]["sha256"]:
-            raise ValueError("selected original image changed while preparing local review")
-    # Keep the caller's wording verbatim. File isolation cannot make a leading
-    # question independent if the caller itself includes a candidate claim.
-    (child / "question.txt").write_text(question, encoding="utf-8")
-    manifest = {
-        "images": selected,
-        "provider": toolkit.manifest.get("provider", "claude"),
-        "input_mode": "isolated_detail_observation",
-        "only_input": (
-            "selected original image copies and local question; no parent scope, "
-            "seed, candidates, history or evaluation"
-        ),
-        "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
-    }
-    if deadline_epoch is not None:
-        # This is part of the immutable child input before its digest is recorded.
-        # The readonly server reads it to expose remaining_seconds to its tools.
-        manifest["deadline_epoch"] = deadline_epoch
-    dump(child / "inputs.json", manifest)
-    return child, digest(child / "inputs.json")
-
-
-def review_detail_observation(
-        toolkit: "Toolkit", question: str, images: list[str], *,
-        timeout_seconds: float = DETAIL_MAX_TIMEOUT_SECONDS, invoke=subscription) -> dict:
-    """Run one bounded, readonly local observation and retain parent receipts."""
-    if (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float))
-            or not DETAIL_MIN_TIMEOUT_SECONDS <= timeout_seconds <= DETAIL_MAX_TIMEOUT_SECONDS):
-        raise ValueError(f"timeout_seconds must be between {DETAIL_MIN_TIMEOUT_SECONDS} and {DETAIL_MAX_TIMEOUT_SECONDS}")
-    # FastMCP may serve sync tools concurrently. Keep allocation, receipt creation
-    # and the bounded invocation together so two calls cannot both claim detail_01.
-    with DETAIL_OBSERVATION_LOCK:
-        used = len(list(toolkit.run.glob("detail_*_request.json")))
-        if used >= 2:
-            return {"error": "local review budget exhausted", "completed": False}
-        parent_deadline = toolkit.manifest.get("deadline_epoch")
-        remaining = toolkit.remaining_seconds()
-        if remaining is not None:
-            child_deadline = min(time.time() + timeout_seconds,
-                                 float(parent_deadline) - DETAIL_COMPLETION_RESERVE_SECONDS)
-            timeout = child_deadline - time.time()
-            if timeout < DETAIL_MIN_TIMEOUT_SECONDS:
-                return {"error": "insufficient remaining budget for local review",
-                        "completed": False, "remaining_seconds": remaining}
-            # Keep the parent completion reserve outside the child workspace too.
-            # This exact absolute deadline avoids extending the child's budget while
-            # it is being prepared or while the parent waits for it to return.
-            # ``timeout`` is also capped by that deadline, not a rounded display value.
-        else:
-            timeout = timeout_seconds
-            child_deadline = time.time() + timeout
-        name = f"detail_{used + 1:02d}"
-        child, input_sha256 = prepare_detail_observation(
-            toolkit, question, images, name, deadline_epoch=child_deadline)
-        source = {"run": name, "input_sha256": input_sha256,
-                  "images": {image: toolkit.manifest["images"][image]["sha256"] for image in images}}
-        # Image copying/manifest writing consume time too. Do not let the process
-        # outlive the deadline the readonly tools were shown.
-        timeout = min(timeout_seconds, child_deadline - time.time())
-        result = invoke(child, f"Images: {images}\nQuestion: {question}", model="haiku", name=name,
-                        readonly=True, timeout=timeout, log_run=toolkit.run,
-                        receipt_context={"observation_source": source})
-        result_event = result.get("result")
-        completed = (bool(result_event) and not result_event.get("is_error", False)
-                     and not result.get("timed_out", False) and result.get("returncode") == 0
-                     and not result.get("routing_error"))
-        return {"actual_model": result.get("actual_model"),
-                "timed_out": result.get("timed_out", False),
-                "returncode": result.get("returncode"),
-                "result": result_event.get("result", "No completed answer") if result_event else "No completed answer",
-                "is_error": result_event.get("is_error", False) if result_event else True,
-                "completed": completed,
-                "routing_error": result.get("routing_error"),
-                "observation_source": source,
-                "remaining_seconds": toolkit.remaining_seconds()}
-
-
-def cost_receipt_summary(run: Path):
-    """Read each root receipt once; detail child folders deliberately have none."""
-    receipts = [json.loads(path.read_bytes()) for path in sorted(run.glob("*_receipt.json"))]
-    estimates = [receipt.get("result", {}).get("total_cost_usd") for receipt in receipts]
-    complete = all(isinstance(value, (int, float)) for value in estimates)
-    partial = sum(value for value in estimates if isinstance(value, (int, float)))
-    return receipts, {"estimated_cost_usd": partial if complete else None,
-                      "cost_receipts_complete": complete,
-                      "reported_partial_cost_usd": partial}
-
-
 def delivery_tool_reply(result: dict) -> dict:
     """Keep full reports on disk; avoid losing a large handoff to CLI truncation."""
     from collections import Counter
 
-    # The subscription client pretty-prints structured tool results. Measuring
-    # only dense JSON underestimated run53's actual response by almost 30k chars.
     def fits(value):
         return len(json.dumps(value, ensure_ascii=False, indent=2)) <= 18000
 
@@ -638,8 +302,7 @@ class Toolkit:
         self.readonly = readonly
 
     def candidate_budget(self):
-        # Missing values belong to historical six-candidate experiments.
-        limit = self.manifest.get("max_candidates", 6)
+        limit = self.manifest.get("max_candidates")
         if type(limit) is not int or limit <= 0:
             raise ValueError("max_candidates must be a positive integer")
         used = len(list(self.run.glob("candidate_*")))
@@ -911,22 +574,15 @@ class Toolkit:
         return result
 
     def inspect_plan(self, draft_id):
-        """Read an admitted immutable draft or the explicitly supplied resume plan."""
+        """Read an immutable plan draft bound to the admitted image."""
         if self.readonly:
             raise ValueError("saved plans are available only to the coordinator")
-        if draft_id == "resume":
-            record = self.manifest.get("plan_recovery")
-            if record is None:
-                raise ValueError("no saved resume plan was supplied")
-            path = self.run / record["frozen_path"]
-            expected, image_name = record["raw_sha256"], record["image"]
-        else:
-            if not isinstance(draft_id, str) or not draft_id.startswith("draft_") or not draft_id[6:].isdigit():
-                raise ValueError("choose resume or an existing draft_NNN")
-            folder = self.run / "plan_drafts" / draft_id
-            record = json.loads((folder / "input.json").read_bytes())
-            path = folder / "plan.json"
-            expected, image_name = record["plan_sha256"], record["image"]
+        if not isinstance(draft_id, str) or not draft_id.startswith("draft_") or not draft_id[6:].isdigit():
+            raise ValueError("choose an existing draft_NNN")
+        folder = self.run / "plan_drafts" / draft_id
+        record = json.loads((folder / "input.json").read_bytes())
+        path = folder / "plan.json"
+        expected, image_name = record["plan_sha256"], record["image"]
         if digest(path) != expected or digest(self.image_path(image_name)) != record["image_sha256"]:
             raise ValueError("saved plan or original image changed")
         return dict(draft_id=draft_id, plan_sha256=expected, image=image_name,
@@ -1005,7 +661,7 @@ class Toolkit:
             bind_missing_plan_sources, normalize_plan_fields, plan_error_hint,
         )
         from scripts.tool_scripts.bim_agent_regularization import (
-            LEGACY_RULE, compact_plan_input, save_report, selected_rule, selected_grid_step,
+            compact_plan_input, save_report, selected_rule, selected_grid_step,
         )
         from scripts.tool_scripts.bim_agent_saved_result import saved_result
         image_path = self.image_path(image)
@@ -1052,17 +708,17 @@ class Toolkit:
                     "scope": "input_provenance_only"}
             diagnostic_plan = copy.deepcopy(plan)
             input_stage = "regularization"
-            if selected_rule(self.manifest) != LEGACY_RULE:
-                from src.agent.geometry.plan_regularization import regularize_plan
-                # The plan argument is model-supplied. Only the tool may write
-                # the audit for this save; retained reading evidence stays separate.
-                plan.pop("regularization", None)
-                with PILImage.open(image_path) as original:
-                    plan, regularization = regularize_plan(
-                        plan, image_size=original.size, image_name=image,
-                        grid_step_m=selected_grid_step(self.manifest))
-                record["regularization"] = regularization
-                record["regularization_report"] = save_report(draft, regularization, self.run)
+            selected_rule(self.manifest)
+            from src.agent.geometry.plan_regularization import regularize_plan
+            # The plan argument is model-supplied. Only the tool may write
+            # the audit for this save; retained reading evidence stays separate.
+            plan.pop("regularization", None)
+            with PILImage.open(image_path) as original:
+                plan, regularization = regularize_plan(
+                    plan, image_size=original.size, image_name=image,
+                    grid_step_m=selected_grid_step(self.manifest))
+            record["regularization"] = regularization
+            record["regularization_report"] = save_report(draft, regularization, self.run)
         except (ValueError, TypeError, KeyError) as error:
             if isinstance(getattr(error, "report", None), dict):
                 regularization = error.report
@@ -1112,9 +768,6 @@ class Toolkit:
             from scripts.tool_scripts.bim_agent_feedback import plan_feedback_error
             record["geometry_feedback"] = plan_feedback_error(error, current=plan)
 
-        # Report-only comparison of the original's ink with this declaration, also for
-        # drafts that fail to compile (run75/83/86/94 left drawn dividers out; run91/93/94
-        # placed doors on solid wall).
         try:
             from src.agent.geometry.plan_drawing_differences import compact_differences, drawing_differences
             with PILImage.open(image_path) as original:
@@ -1251,7 +904,7 @@ class Toolkit:
         from src.agent.geometry.plan_assembly import assemble_plan_proposals
         from src.agent.geometry.plan_partition import compile_plan_partition
         from scripts.tool_scripts.bim_agent_regularization import (
-            LEGACY_RULE, save_report, selected_rule, selected_cross_storey_failure_policy,
+            save_report, selected_rule, selected_cross_storey_failure_policy,
             selected_grid_step, summary,
         )
         if self.readonly:
@@ -1285,28 +938,28 @@ class Toolkit:
         folder.mkdir(exist_ok=True)
         path = folder / f"assembly_{len(list(folder.glob('assembly_*.json'))) + 1:03d}.json"
         regularization = None
-        if selected_rule(self.manifest) != LEGACY_RULE:
-            from src.agent.geometry.plan_regularization import regularize_plan_stack
-            audit_folder = folder / path.stem
-            audit_folder.mkdir(exist_ok=False)
-            dump(audit_folder / "submitted_plans.json", declared)
-            try:
-                declared, regularization = regularize_plan_stack(declared,
-                    cross_storey_failure_policy=selected_cross_storey_failure_policy(self.manifest),
-                    grid_step_m=selected_grid_step(self.manifest))
-            except (ValueError, TypeError, KeyError) as error:
-                rejected = getattr(error, "report", None)
-                result = {"status": "error", "error": str(error), "error_stage": "regularization",
-                          "source_geometry_ready": False, "remaining_seconds": self.remaining_seconds()}
-                if isinstance(rejected, dict):
-                    result["regularization"] = save_report(audit_folder, rejected, self.run)
-                dump(path, {"floors": bindings, "status": "rejected", "error": str(error),
-                            "regularization": rejected})
-                from scripts.tool_scripts.bim_agent_saved_result import saved_result
-                saved_result(result, audit_written=True)
-                self.log("assemble_plan_bim", result)
-                return result
-            report_ref = save_report(audit_folder, regularization, self.run)
+        selected_rule(self.manifest)
+        from src.agent.geometry.plan_regularization import regularize_plan_stack
+        audit_folder = folder / path.stem
+        audit_folder.mkdir(exist_ok=False)
+        dump(audit_folder / "submitted_plans.json", declared)
+        try:
+            declared, regularization = regularize_plan_stack(declared,
+                cross_storey_failure_policy=selected_cross_storey_failure_policy(self.manifest),
+                grid_step_m=selected_grid_step(self.manifest))
+        except (ValueError, TypeError, KeyError) as error:
+            rejected = getattr(error, "report", None)
+            result = {"status": "error", "error": str(error), "error_stage": "regularization",
+                      "source_geometry_ready": False, "remaining_seconds": self.remaining_seconds()}
+            if isinstance(rejected, dict):
+                result["regularization"] = save_report(audit_folder, rejected, self.run)
+            dump(path, {"floors": bindings, "status": "rejected", "error": str(error),
+                        "regularization": rejected})
+            from scripts.tool_scripts.bim_agent_saved_result import saved_result
+            saved_result(result, audit_written=True)
+            self.log("assemble_plan_bim", result)
+            return result
+        report_ref = save_report(audit_folder, regularization, self.run)
         for index, (item, binding_row) in enumerate(zip(declared, bindings)):
             plan, image = item["plan"], item["image_name"]
             proposal, compilation = compile_plan_partition(
@@ -1410,9 +1063,8 @@ class Toolkit:
                     "candidate_budget": budget, "remaining_seconds": self.remaining_seconds()})
         candidate = f"candidate_{index:02d}"
         provenance = {"input_manifest_sha256": digest(self.run/"inputs.json"),
-                      "mode": self.manifest.get("input_mode", "original_images_agent_experiment"),
-                      "generator": self.manifest.get("generator") or
-                                   f"{self.manifest.get('provider', 'claude')} subscription tool loop"}
+                      "mode": self.manifest.get("input_mode", "original_images"),
+                      "generator": self.manifest.get("generator") or "native Sim-BIM runtime"}
         if parent is not None:
             provenance.update(parent_candidate=parent,
                               parent_proposal_sha256=digest(self.candidate_path(parent)/"proposal.json"))
@@ -1769,7 +1421,7 @@ class Toolkit:
             return {**result, 'status': 'unavailable',
                     'reason': f'Could not load space relation revalidation context: {error}'}
         # The existing append-only tool log retains the original report, including
-        # legacy pixel observations. Do not adopt a subsequently edited report file.
+        # previously saved pixel observations. Do not adopt an edited report file.
         recorded = {}
         log = self.run / 'tools.jsonl'
         log_error = None
@@ -2228,43 +1880,6 @@ class Toolkit:
                                              "review_interval_count": len(result["review_intervals"])})
         return [Image(data=data.getvalue(), format="png"), json.dumps(result)]
 
-    def profile(self, name, box, axis, rgb, tolerance):
-        import numpy as np
-        with PILImage.open(self.image_path(name)) as raw:
-            x0,y0,x1,y1 = box
-            if not (0 <= x0 < x1 <= raw.width and 0 <= y0 < y1 <= raw.height):
-                raise ValueError("box outside original image bounds")
-            pixels = np.asarray(raw.convert("RGB").crop(box)).astype(float)
-        if len(rgb) != 3 or not all(0 <= c <= 255 for c in rgb) or not 0 <= tolerance <= 442:
-            raise ValueError("RGB in 0..255 and distance tolerance in 0..442 required")
-        mask = np.linalg.norm(pixels - np.asarray(rgb), axis=2) <= tolerance
-        if axis not in {"x", "y"}:
-            raise ValueError("axis must be x or y")
-        counts = mask.sum(axis=0 if axis == "x" else 1)
-        offset = x0 if axis == "x" else y0
-        # Return runs of positive support plus maxima, without naming objects.
-        runs = _profile_positive_runs(counts, offset)
-        result = {"axis": axis, "runs": runs, "matching_pixels": int(mask.sum()),
-                  "name": name, "box_original_pixels": list(box),
-                  "support_length": mask.shape[0] if axis == "x" else mask.shape[1],
-                  "coordinate_system": "original image pixels; interval endpoints inclusive",
-                  "evidence_note": "pixels spans any positive color support, including connected "
-                      "lines, text and arrow tips; its ends are not measured dimension or object endpoints. "
-                      "peak is only the FIRST global maximum in the run. support_peaks lists every "
-                      "positive local maximum plateau with its count, including weaker peaks, in "
-                      "original coordinates; no smoothing, threshold or endpoint selection is applied. "
-                      "A plateau is higher than both adjacent counts (zero outside the run). "
-                      "Peaks can include noise and do not identify ticks, walls or openings. Inspect "
-                      "the original crop or use view_pixel_profile with the same input image name and "
-                      "a chosen min_fraction before adopting coordinates."}
-        diagnostic = _empty_profile_diagnostics(
-            pixels, rgb, counts, 1, mask.shape[0] if axis == "x" else mask.shape[1])
-        if diagnostic is not None:
-            result["empty_filter_diagnostics"] = diagnostic
-        self.log("pixel_profile", {"name": name, "box": box, "rgb": rgb,
-                                   "tolerance": tolerance, "result": result})
-        return result
-
     def view_profile(self, name, box, axis, rgb, tolerance, min_fraction):
         """Return a checkable profile table and image without assigning semantics."""
         import numpy as np
@@ -2426,49 +2041,8 @@ class Toolkit:
         buffer = io.BytesIO(); picture.save(buffer, "PNG")
         return [Image(data=buffer.getvalue(), format="png"), json.dumps(record)]
 
-    def preview_trace(self, name, polygon_pixels, openings, x_anchors, y_anchors, basis):
-        from src.agent.geometry.space_trace import render_space_trace
-        with PILImage.open(self.image_path(name)) as original:
-            picture, result = render_space_trace(original, polygon_pixels=polygon_pixels,
-                openings=openings, x_anchors=x_anchors, y_anchors=y_anchors, basis=basis)
-        folder = self.run / "space_traces"
-        folder.mkdir(exist_ok=True)
-        trace = f"trace_{len(list(folder.glob('trace_*.json'))) + 1:03d}"
-        picture.save(folder / f"{trace}.png")
-        result.update(trace_id=trace, name=name, image_sha256=digest(self.image_path(name)),
-                      trace_image=f"space_traces/{trace}.png", remaining_seconds=self.remaining_seconds())
-        dump(folder / f"{trace}.json", result)
-        self.log("preview_space_trace", result)
-        buffer = io.BytesIO(); picture.save(buffer, "PNG")
-        return [Image(data=buffer.getvalue(), format="png"), json.dumps(result)]
 
-    def view_trace(self, trace_id):
-        allowed = {p.stem for p in (self.run / "space_traces").glob("trace_*.json")}
-        if trace_id not in allowed:
-            raise ValueError("unknown trace_id")
-        record = json.loads((self.run / "space_traces" / f"{trace_id}.json").read_bytes())
-        if digest(self.image_path(record["name"])) != record["image_sha256"]:
-            raise ValueError("trace original image changed")
-        self.log("view_space_trace", {"trace_id": trace_id})
-        return [Image(data=(self.run / "space_traces" / f"{trace_id}.png").read_bytes(), format="png"), json.dumps(record)]
-
-    def select_trace(self, trace_id):
-        allowed = {p.stem for p in (self.run / "space_traces").glob("trace_*.json")}
-        if trace_id not in allowed:
-            raise ValueError("unknown trace_id; first preview_space_trace")
-        result = json.loads((self.run / "space_traces" / f"{trace_id}.json").read_bytes())
-        if not result["geometrically_executable"]:
-            raise ValueError("trace has geometry errors; revise the contour/aperture endpoints first")
-        if digest(self.image_path(result["name"])) != result["image_sha256"]:
-            raise ValueError("trace original image changed")
-        selection = {"trace_id": trace_id, "trace_sha256": digest(self.run / "space_traces" / f"{trace_id}.json"),
-                     "drawing_fidelity": "not_evaluated", "selection_origin": "model_selected"}
-        dump(self.run / "trace_selection.json", selection)
-        self.log("select_space_trace", selection)
-        return selection
-
-
-def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
+def build_tool_server(run: Path, readonly=False):
     """Construct the sole tool catalog without starting transport or executing tools."""
     from mcp.server.fastmcp import Image
     from scripts.tool_scripts.bim_agent_feedback import FeedbackMCP
@@ -2495,7 +2069,7 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
         """List admitted original images, native mesh, building declaration and scope."""
         toolkit.log("inputs", {})
         return {**toolkit.manifest, "input_view_status": toolkit.input_view_status(),
-                "candidate_budget": toolkit.candidate_budget(),
+                **({"candidate_budget": toolkit.candidate_budget()} if not toolkit.readonly else {}),
                 "remaining_seconds": toolkit.remaining_seconds()}
 
     @server.tool()
@@ -2516,12 +2090,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
                 raise ValueError("claim_id selects the saved image/box; omit name and box")
             return toolkit.view_claim_evidence(claim_id, source_index, display_scale)
         return toolkit.view(name, box, coordinate_grid, display_scale)
-
-    @server.tool()
-    def pixel_profile(name: ImageFilename, box: list[int], axis: Literal["x", "y"],
-                      rgb: list[int], tolerance: float = 70) -> dict:
-        """Historical replay only; use view_pixel_profile, optionally include_image=false."""
-        return toolkit.profile(name, box, axis, rgb, tolerance)
 
     @server.tool()
     def view_pixel_profile(name: ImageFilename, box: list[int], axis: Literal["x", "y"],
@@ -2576,21 +2144,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
         """
         return toolkit.pixel_region(name, seed_pixel, background_rgb, tolerance, simplify_pixels)
 
-    @server.tool()
-    def preview_space_trace(name: ImageFilename, polygon_pixels: list[list[float]], openings: list[dict],
-                            x_anchors: list[list[float]], y_anchors: list[list[float]], basis: str):
-        """Historical replay: preview an original-pixel contour without changing BIM."""
-        return toolkit.preview_trace(name, polygon_pixels, openings, x_anchors, y_anchors, basis)
-
-    @server.tool()
-    def view_space_trace(trace_id: str):
-        """Historical replay: reopen a saved local trace."""
-        return toolkit.view_trace(trace_id)
-
-    @server.tool()
-    def select_space_trace(trace_id: str) -> dict:
-        """Historical replay: record trace selection, without changing BIM."""
-        return toolkit.select_trace(trace_id)
 
     @server.tool()
     def map_dimension_chain(lengths: list[float], unit: Literal["mm", "m"] = "mm",
@@ -2922,8 +2475,7 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
                 previews.append(result.structuredContent)
             reply = {**row, "evidence_previews": previews,
                      "unpreviewed_source_indices": list(range(3, len(row["sources"])))}
-            # run94 claim_0001 applied a 3.6 m chain to 3 m storey windows on three facades
-            # and two widths; show those facts beside the claim without judging them.
+            # Show the bound geometry alongside claim evidence without inferring correctness.
             try:
                 from src.agent.execution.bim_claim_facts import claim_facts
                 reply = {"facts": claim_facts(row, toolkit.claims().candidate(row["claim"]["candidate"])[0]), **reply}
@@ -2942,10 +2494,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
             """
             return candidate_result(toolkit.claim_transaction(candidate, entries_json))
 
-        @server.tool()
-        def record_claim(claim_json: str) -> CallToolResult:
-            """Compatibility: record one claim/count. Models use claim_transaction."""
-            return claim_result(toolkit.record_claim(claim_json))
 
         @server.tool()
         def replace_claim_sources(claim_id: str, view_ids: list[str], reason: str) -> CallToolResult:
@@ -2958,16 +2506,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
             """
             return claim_result(toolkit.replace_claim_sources(claim_id, view_ids, reason))
 
-        @server.tool()
-        def view_claim_evidence(claim_id: str, source_index: int = 0,
-                                display_scale: float = 1.0) -> CallToolResult:
-            """Historical replay only; use view_image(claim_id=..., source_index=...)."""
-            return toolkit.view_claim_evidence(claim_id, source_index, display_scale)
-
-        @server.tool()
-        def decide_claim(claim_id: str, disposition: Literal["adopted", "deferred", "retracted"], reason: str) -> dict:
-            """Compatibility: decide one claim. Models use claim_transaction."""
-            return toolkit.decide_claim(claim_id, disposition, reason)
 
         @server.tool()
         def claim_status(candidate: str | None = None) -> dict:
@@ -2980,10 +2518,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
                 return project(toolkit.claims(), candidate)
             return toolkit.claims().status()
 
-        @server.tool()
-        def confirm_claims(candidate: str, operations_json: str) -> dict:
-            """Compatibility: confirm bound values without geometry changes. Models use claim_transaction."""
-            return toolkit.confirm_claims(candidate, operations_json)
 
         @server.tool()
         def check_wall_dimensions(candidate: str, references_json: str = "", dimensions_json: str = "",
@@ -3183,15 +2717,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
             from scripts.tool_scripts.bim_agent_replies import compact_reply
             return compact_reply(toolkit.run, "check_openings", result)
 
-        @server.tool()
-        def record_work_review(candidate: str, decision: Literal["continue", "stop"], reason: str,
-                               next_action: str = "") -> dict:
-            """During a continuation turn, choose continue or stop against saved work.
-            Explain scope/evidence; continue requires a concrete next_action to execute
-            THIS turn. A stop is a model judgment, not proof of task or image fidelity.
-            """
-            from scripts.tool_scripts.bim_agent_continuation import record_work_review as record
-            return record(toolkit, candidate, decision, reason, next_action)
 
         @server.tool()
         def finish_bim(candidate: str, reviews_json: str = "", inferences_json: str = "") -> dict:
@@ -3315,21 +2840,6 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
             return candidate_result(result, mesh_observations=mesh_observations,
                                     inferences_json=inferences_json)
 
-        @server.tool()
-        def review_detail(question: str, images: list[str], timeout_seconds: float = 120) -> dict:
-            """Ask the local image model (Haiku) one small visual question in a region.
-            Give image names and original crop coordinates, and describe observable
-            original-image evidence rather than a candidate conclusion. The submitted
-            question is not text-cleaned, so this only isolates file context. At most
-            two local reviews are available in this experiment. Choose 15–240
-            seconds (default 120), capped by the parent's remaining time with a
-            completion reserve. Keep the task small enough to return within it.
-            """
-            response = review_detail_observation(toolkit, question, images, timeout_seconds=timeout_seconds)
-            toolkit.log("review_detail", {"question": question, "images": images,
-                                          "timeout_seconds_requested": timeout_seconds,
-                                          "response": response})
-            return response
 
         @server.tool()
         def build_plan_bim(image: ImageFilename, plan_json: str, reviews_json: str = "") -> CallToolResult:
@@ -3502,222 +3012,29 @@ def build_tool_server(run: Path, readonly=False, *, enabled_only=False):
                 TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False)),
             ], structuredContent=metadata)
 
-        @server.tool()
-        def view_candidate(candidate: str, floor_id: str) -> Image:
-            """Historical replay only; use inspect_candidate(floor_id=..., include_plan=true)."""
-            image, metadata = toolkit.plan_view(candidate, floor_id)
-            toolkit.log("view_candidate", metadata)
-            return image
 
-    if enabled_only:
-        # The unfiltered service remains available for immutable version checks.
-        capabilities = tool_capabilities(toolkit.manifest)
-        for name in tuple(server._tool_manager._tools):
-            if not filter_tool_catalog([{"name": name}], **capabilities):
-                server.remove_tool(name)
     return server
 
 
-def serve(run: Path, readonly=False, *, enabled_only=False):
+def serve(run: Path, readonly=False):
     if os.name == "nt":
         # SciPy's Fortran DLL initialization can wait on CRT stdio locks.
         # Import before MCP starts its blocking stdin reader, not during the
         # first geometry call while that reader already owns a stdio lock.
         import scipy.signal  # noqa: F401
-    server = build_tool_server(run, readonly=readonly, enabled_only=enabled_only)
+    server = build_tool_server(run, readonly=readonly)
     server.run()
 
 
-def run_experiment(args):
-    if getattr(args, "timeout", None) is None:
-        args.timeout = 6000 if getattr(args, "provider", "claude") == "glm" else 900
-    if isinstance(args.timeout, bool) or not isinstance(args.timeout, (int, float)) or not math.isfinite(args.timeout) or args.timeout <= 0:
-        raise ValueError("timeout must be positive finite seconds")
-    max_candidates = getattr(args, "max_candidates", 24)
-    if type(max_candidates) is not int or max_candidates <= 0:
-        raise ValueError("max_candidates must be a positive integer")
-    provider = getattr(args, "provider", "claude")
-    continuation_rounds = getattr(args, "continuation_rounds", 0)
-    if type(continuation_rounds) is not int or not 0 <= continuation_rounds <= 4:
-        raise ValueError("continuation_rounds must be an integer from 0 to 4")
-    if provider == "glm" and getattr(args, "exploratory_opus", False):
-        raise ValueError("--provider glm cannot be combined with --exploratory-opus")
-    main_model, workers = getattr(args, "main_model", None), getattr(args, "workers", None)
-    if (main_model or workers) and (provider != "claude" or getattr(args, "exploratory_opus", False)):
-        raise ValueError("--main-model and --workers apply only to the Claude Sonnet route")
-    from src.agent.bim_inputs import prepare_bim_inputs
-    run = args.out.resolve()
-    seed_path = getattr(args, "resume_candidate", None)
-    plan_image = getattr(args, "plan_image", None)
-    manifest = prepare_bim_inputs(run, images_path=args.images,
-        mesh_path=getattr(args, "mesh", None), building_input_path=getattr(args, "building_input", None),
-        scope=args.scope, image_kind=getattr(args, "image_kind", None), max_candidates=max_candidates,
-        floor_images=getattr(args, "floor_plan_images", None),
-        started_epoch=None if getattr(args, "prepare_only", False) else time.time(), seconds=args.timeout,
-        provider=provider, continuation_rounds=continuation_rounds,
-        review_detail_enabled=getattr(args, "review_detail", False),
-        exploratory_opus=getattr(args, "exploratory_opus", False), seed_path=seed_path,
-        resume_plan_path=getattr(args, "resume_plan", None), plan_image=plan_image)
-    building_input, plan_recovery, mesh_input = (manifest.get(name) for name in
-        ("building_input", "plan_recovery", "mesh_input"))
-    continuation = ("The previous pixel-plan declaration is available at inputs.plan_recovery.declaration "
-                    f"and is bound to original image {plan_image}. It is unverified and may fail compilation; "
-                    "importing it does not establish a valid source BIM. Follow this run's scope: you may "
-                    "first submit it unchanged to reproduce the failure and inspect feedback, or revise "
-                    "it using evidence from the supplied original."
-                    if plan_recovery else
-                    "A saved proposal is available as seed. Compare its actual spatial partitions, "
-                    "openings and connectivity with the original images. Choose substantive "
-                    "discrepancies for local review or revision, while preserving reliable geometry; "
-                    "do not redo a full reading." if seed_path else
-                    "Observe the exterior evidence, state architectural hypotheses for missing parts "
-                    "and interiors, and build at the requested space detail. Inspect the actual saved "
-                    "source against the input and repair substantive discrepancies." if mesh_input else
-                    "No saved proposal is supplied; work from the original inputs.")
-    declaration_prompt = (
-        " A structured user building declaration is available from inputs under "
-        "building_input.declaration. Preserve each field's stated meaning. In particular, "
-        "thermal_zones describes downstream simulation zoning and is not the physical source-room "
-        "count. Compare declaration claims with the supplied drawings and report conflicts or "
-        "uncertainty explicitly."
-        if building_input else
-        " No structured building declaration was supplied for this experiment."
-    )
-    prompt = (f"Scope: {args.scope}\nBudget: {args.timeout} seconds. "
-              f"Start by listing supplied inputs.{declaration_prompt} {continuation} "
-              "Report limitations honestly, and finish within the budget.")
-    if getattr(args, "prepare_only", False):
-        (run / "task.txt").write_text(prompt, encoding="utf-8")
-        (run / "guide.txt").write_text(run_guide(run), encoding="utf-8")
-        prepared = {"status": "prepared_not_run", "run": str(run),
-                    "model_calls": 0, "deadline_epoch": None,
-                    "note": "Frozen inputs and common instructions only. An external controller must "
-                            "record its model, start/deadline and receipt before claiming an experiment."}
-        dump(run / "preparation.json", prepared)
-        print(json.dumps(prepared, ensure_ascii=False, indent=2))
-        return prepared
-    record = subscription(run, prompt,
-                          model="opus" if getattr(args, "exploratory_opus", False) else "sonnet",
-                          name="agent", timeout=args.timeout,
-                          effort=getattr(args, "effort", None),
-                          exploratory_opus=getattr(args, "exploratory_opus", False),
-                          main_model=main_model, workers=workers)
-    from scripts.tool_scripts.bim_agent_continuation import run_continuations, response_completed as completed
-    def invoke_followup(prompt, *, name, timeout):
-        return subscription(run, prompt,
-            model="opus" if getattr(args, "exploratory_opus", False) else "sonnet",
-            name=name, timeout=timeout, effort=getattr(args, "effort", None),
-            exploratory_opus=getattr(args, "exploratory_opus", False),
-            main_model=main_model, workers=workers,
-            receipt_context={"role": "main_agent_continuation", "continuation_turn": name})
-    records, continuation_status = run_continuations(Toolkit(run), record,
-        max_rounds=continuation_rounds, invoke=invoke_followup, compact=delivery_tool_reply)
-    record = records[-1]
-    total_elapsed = round(sum(row["elapsed_seconds"] for row in records), 2)
-    candidates = []
-    for path in sorted(run.glob("candidate_*/report.json")):
-        try:
-            report = json.loads(path.read_bytes())
-        except (OSError, ValueError) as error:
-            # A hard stop may leave the newest export unfinished. Preserve the
-            # failure and continue to the last readable saved building.
-            report = {"status": "unreadable_after_interruption", "error": str(error)}
-        candidates.append({"candidate":path.parent.name,"status":report.get("status"),
-                           "source_geometry_ready":report.get("source_geometry_ready"),
-                           "viewer_exists":(path.parent/"viewer.html").is_file(),
-                           "counts":report.get("counts"),
-                           **({"error": report["error"]} if report.get("error") else {})})
-    selection = run / "delivery_selection.json"
-    delivery = None
-    response_completed = completed(record)
-    generation_status = {"state":"completed" if response_completed else "interrupted",
-                         "agent_response_completed":response_completed,
-                         "elapsed_seconds":total_elapsed,
-                         "continuation": continuation_status,
-                         "returncode":record.get("returncode"),
-                         "timed_out":record.get("timed_out", False)}
-    if record.get("result", {}).get("is_error"):
-        generation_status["error"] = str(record["result"].get("result", "Model invocation failed"))[:1000]
-    if record.get("routing_error"):
-        generation_status["error"] = record["routing_error"]
-    if selection.exists() and not record.get("timed_out"):
-        chosen = json.loads(selection.read_bytes())["candidate"]
-        delivery = Toolkit(run).delivery(chosen, selection_origin="agent_selected", generation_status=generation_status)
-    else:
-        from scripts.tool_scripts.bim_agent_budget import fallback_selection
-        chosen, origin = fallback_selection(Toolkit(run))
-        if chosen:
-            delivery = Toolkit(run).delivery(chosen, selection_origin=origin, generation_status=generation_status)
-    receipts, cost_summary = cost_receipt_summary(run)
-    summary = {"input_mode":manifest["input_mode"],
-               "source_input_mode": manifest["source_input_mode"],
-               "input_contents": manifest["input_contents"],
-               "building_input_sha256": (building_input["raw_sha256"] if building_input else None),
-               "candidate_results":candidates,
-               "agent_response_completed":response_completed,
-               "has_viewable_candidate":any(c["viewer_exists"] for c in candidates) or bool(delivery and delivery["viewer_exists"]),
-               "elapsed_seconds":total_elapsed,"drawing_fidelity":"not_evaluated",
-               "continuation": continuation_status,
-               "opening_reviews":[p.relative_to(run).as_posix() for p in sorted((run/"opening_reviews").glob("review_*.json"))],
-               "delivery": {"candidate":delivery["candidate"], "selection_origin":delivery["selection_origin"],
-                            "report":"delivery.json", "viewer":"delivery.html"} if delivery else None,
-               "subscription_invocations":len(receipts),
-               **cost_summary,
-               "not_evaluated":["independent GT comparison","human approval","EnergyPlus"],
-               "estimated_cost_note":"CLI estimates are not subscription bills"}
-    dump(run/"summary.json",summary)
-    from src.agent.runtime_behaviour import write_behaviour_report
-    write_behaviour_report(run, run / "behaviour")
-    print(json.dumps(summary,ensure_ascii=False,indent=2))
-
-
 def main():
-    parser=argparse.ArgumentParser(description=__doc__)
-    commands=parser.add_subparsers(dest="command",required=True)
-    run=commands.add_parser("run")
-    run.add_argument("--images",type=Path,help="Optional original PNG image directory")
-    run.add_argument("--mesh",type=Path,help="Original self-contained GLB; observed on demand by the agent")
-    run.add_argument("--image-kind", choices=("drawings", "mesh_views", "photos", "unknown"),
-                     help="What the PNG images are; default drawings without --mesh, unknown with it")
-    run.add_argument("--building-input", type=Path,
-                     help="Explicit user building declaration JSON; omitted runs remain PNG-only")
-    run.add_argument("--out",type=Path,required=True)
-    run.add_argument("--scope",default="Reconstruct the building shown in all supplied drawings.")
-    run.add_argument("--timeout",type=int,default=None, help="Seconds; default 6000 for GLM, 900 for Claude")
-    run.add_argument("--floor-plan-image", dest="floor_plan_images", action="append",
-                     help="Explicit expected floor-plan filename (repeat for all floors); otherwise numeric F filenames are shown as hints")
-    run.add_argument("--prepare-only", action="store_true",
-                     help="Freeze admitted inputs and instructions without a model call or ticking deadline")
-    run.add_argument("--max-candidates", type=int, default=24,
-                     help="Shared export quota for floor builds, assembly and revisions (default: 24)")
-    run.add_argument("--continuation-rounds", type=int, choices=range(5), default=0,
-                     help="Experimental bounded main-agent follow-ups within the SAME total deadline")
-    run.add_argument("--review-detail", action="store_true",
-                     help="Enable the bounded local image-model review tool")
-    run.add_argument("--provider", choices=("claude", "glm"), default="claude",
-                     help="Subscription route; glm uses glm-5.3-flash for main and local image tasks")
-    run.add_argument("--exploratory-opus", action="store_true",
-                     help="Explicit task-authorized exploratory Opus subscription run; default remains Sonnet")
-    run.add_argument("--effort", choices=("low", "medium"), default="medium",
-                     help="Sonnet reasoning effort for this run; local Haiku configuration is unchanged")
-    run.add_argument("--main-model", choices=MAIN_MODELS,
-                     help="Claude main model; default stays claude-sonnet-5")
-    run.add_argument("--workers", choices=tuple(WORKER_MODELS),
-                     help="Let the Claude main model delegate sub-tasks to one worker subagent on this model")
-    recovery = run.add_mutually_exclusive_group()
-    recovery.add_argument("--resume-candidate",type=Path,
-                          help="Recover from a saved proposal directory, not an independent cold start")
-    recovery.add_argument("--resume-plan",type=Path,
-                          help="Resume from one unverified pixel-plan JSON; does not auto-build a BIM")
-    run.add_argument("--plan-image", help="Exact supplied PNG filename associated with --resume-plan")
-    server=commands.add_parser("serve")
-    server.add_argument("run",type=Path)
-    server.add_argument("--readonly",action="store_true")
-    server.add_argument("--enabled-only", action="store_true",
-                        help="Expose only capabilities enabled in the run manifest")
-    args=parser.parse_args()
-    if args.command=="serve": serve(args.run.resolve(),args.readonly, enabled_only=args.enabled_only)
-    else: run_experiment(args)
+    parser = argparse.ArgumentParser(description="Serve the current Sim-BIM tools over MCP.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    server = commands.add_parser("serve")
+    server.add_argument("run", type=Path)
+    server.add_argument("--readonly", action="store_true")
+    args = parser.parse_args()
+    serve(args.run.resolve(), args.readonly)
 
 
-if __name__=="__main__": main()
+if __name__ == "__main__":
+    main()

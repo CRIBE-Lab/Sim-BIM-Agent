@@ -1,26 +1,16 @@
-"""Self-contained OFFLINE interactive 3D viewer for building_geometry.json (#3).
+"""Self-contained interactive 3D viewer for Sim-BIM source models.
 
-The geometry-confirmation gate (contracts §1 2/3 ②a) is a HUMAN gate: the user
-inspects the deterministic build in 3D before the run continues. Real interactive
-3D: orbit/zoom, wall translucency, section cuts, exploded view
-(by floor or by zone, always upward), CAD-style vertex-snap measure, click-select,
-save-PNG, a small ground compass + axis ticks.
+The offline HTML supports orbit and zoom, translucent walls, section cuts,
+exploded floors or spaces, vertex measurements, selection and PNG export.
+Three.js and OrbitControls are inlined from vendor; model data is embedded
+with script-safe JSON encoding, so the viewer opens directly in a browser.
 
-ONE fully self-contained ``geometry_viewer.html``:
-  - three.js (r0.137.5 UMD global) + OrbitControls INLINED from vendor/ → offline,
-    file:// double-click, no CDN.
-  - geometry embedded inline as ``window.GEO`` (script-safe via ``_js_embed``).
-  - ALL faces are kept (each zone stays a closed box, preserving the EP reciprocal
-    split-pairing). z-fighting is avoided WITHOUT deleting geometry: at explode=0 one
-    face of each coincident reciprocal pair is HIDDEN (solid clean shell, no gaps);
-    at explode>0 all faces show, separated by the explode offset. Windows are pushed
-    proud of their wall (WIN_POP) so they render clean and stay pickable.
-
-Headless note: the rendered result needs a browser to confirm (no browser here);
-generation + ``node --check`` of the app JS is the automated guard.
+Coincident boundary faces are retained in the model. The viewer hides one of
+an overlapping pair at zero separation and displays both in exploded views.
+Window offsets keep glazing visible and selectable.
 
 Usage:
-    python scripts/tool_scripts/render_geometry_viewer.py <building_geometry.json|source_model.json> [--out viewer.html]
+    python scripts/tool_scripts/render_geometry_viewer.py source_model.json --out viewer.html
 """
 
 from __future__ import annotations
@@ -103,7 +93,7 @@ _APP_JS = r"""
   const ROLES = GEO.roles || {};
   const HAS_ROLES = Object.keys(ROLES).length > 0;
   const roleOf = z => (ROLES[z] || '').toString().toLowerCase();
-  // zone-mode fill: by room type if roles are available, else white (legacy behaviour)
+  // zone-mode fill: by room type if roles are available, else white
   const roleColor = z => { if(!HAS_ROLES) return WHITE; const r=roleOf(z); return r ? (ROLE_COLORS[r] ?? ROLE_DEFAULT) : ROLE_DEFAULT; };
   const hex6 = c => '#'+('000000'+(c>>>0).toString(16)).slice(-6);
   const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -133,7 +123,7 @@ _APP_JS = r"""
     zoneFloor[z]=fi>=0 ? fi : nearestBase(_zFloorZ[z]??_zMinZ[z], BASES);
     // Filtering follows declared source membership only. A continuous space
     // remains one volume while appearing in every storey that explicitly
-    // lists it; legacy viewers keep their single geometric floor assignment.
+    // lists it; cells without section membership use their geometric floor.
     const declared=(GEO.floor_memberships||{})[z]||[];
     zoneFloors[z]=declared.length ? declared : [zoneFloor[z]];
   });
@@ -194,7 +184,7 @@ _APP_JS = r"""
   [['x',0xcc1111,new THREE.Vector3(aL*1.25,0,0)],['y',0x11aa11,new THREE.Vector3(0,aL*1.25,0)],
    ['z',0x1111cc,new THREE.Vector3(0,0,aL*1.25)]].forEach(([t,col,off])=>{
     const s=label(t,'#'+col.toString(16).padStart(6,'0'),aLab); s.position.copy(bb.min).add(off); scene.add(s); });
-  // compass: small flat 2D ring on the ground, N = +Y (EnergyPlus convention)
+  // compass: small flat 2D ring on the ground, N = +Y in the displayed coordinate frame
   const cR=radius*0.16, cC=new THREE.Vector3(bb.min.x-radius*0.32, bb.min.y-radius*0.32, bb.min.z+0.02);
   const ring=new THREE.Mesh(new THREE.RingGeometry(cR*0.86, cR, 48),
     new THREE.MeshBasicMaterial({color:0x9aa0a6, side:THREE.DoubleSide})); ring.position.copy(cC); scene.add(ring);
@@ -758,6 +748,11 @@ _STYLE = r"""
   #panel button:hover { background:#e7ebf0; }
   .sec { border-top:1px solid #ebedf0; padding-top:9px; margin-top:9px; }
   #rinfo { position:absolute; top:12px; right:12px; width:340px; max-height:calc(100% - 24px); overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+  #rinfo > * { flex-shrink:0; }
+  .source-notes { padding:12px 16px; background:rgba(255,255,255,0.96); color:#222;
+    border:1px solid #d7dbe0; border-radius:8px; overflow-wrap:anywhere; }
+  .source-notes details { margin-top:6px; }
+  .source-notes ul { padding-left:18px; }
   #hud { background:rgba(20,28,44,0.88); color:#eef; padding:12px 16px; border-radius:8px; font-size:15px; }
   #hud .hh { font-size:12px; letter-spacing:.05em; color:#8fb0e0; margin:8px 0 3px; text-transform:uppercase; }
   #hud .hh:first-child { margin-top:0; }
@@ -800,43 +795,16 @@ def app_js() -> str:
 
 
 def discover_roles(bg_path: Path) -> dict:
-    """zone-name -> room role (office/meeting/corridor/...).
-
-    Prefer building_geometry.json zone_meta because deterministic public zone
-    names intentionally differ from correction Cell.id. Fall back to the legacy
-    sibling correction lookup for older artifacts.
-    """
+    """Read room-use colours from this display geometry's own zone metadata."""
     try:
-        bg = json.loads(bg_path.read_text(encoding="utf-8"))
+        geometry = json.loads(bg_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        bg = {}
-    roles = {
-        str(m["name"]): str(m["role"])
-        for m in bg.get("zone_meta", [])
-        if m.get("name") and m.get("role")
+        return {}
+    return {
+        str(row["name"]): str(row["role"])
+        for row in geometry.get("zone_meta", [])
+        if row.get("name") and row.get("role")
     }
-    if roles:
-        return roles
-    candidates = [
-        bg_path.parent.parent / "1_correction" / "correction_geometry.json",  # <run>/2_modelling/bg.json
-        bg_path.parent / "correction_geometry.json",
-        bg_path.with_name("correction_geometry.json"),
-    ]
-    for cg in candidates:
-        if not cg.exists():
-            continue
-        try:
-            d = json.loads(cg.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
-        roles = {}
-        for fl in d.get("floors", []):
-            for c in fl.get("cells", []):
-                cid, role = c.get("id"), c.get("role")
-                if cid and role:
-                    roles[str(cid)] = str(role)
-        return roles
-    return {}
 
 
 def wall_properties(source: dict) -> dict:
@@ -935,7 +903,7 @@ def load_viewer_geometry(path: Path) -> dict:
 
     Source BIM inputs go through their validated display projection.  Unknown
     source schema versions fail rather than opening a plausible-looking empty
-    legacy viewer.
+    viewer.
     """
     data = json.loads(path.read_text(encoding="utf-8"))
     schema = data.get("schema_version")
@@ -957,7 +925,7 @@ def load_viewer_geometry(path: Path) -> dict:
         from src.agent.geometry.source_model import _digest
 
         source = json.loads(source_path.read_text(encoding="utf-8"))
-        # Legacy building_geometry carries a digest of that derived geometry.
+        # Attach a source only when its digest binds this display geometry.
         if source.get("derived_geometry_sha256") == _digest(data):
             data["source_model"] = source
     return data
@@ -970,7 +938,7 @@ def main() -> int:
     ap.add_argument("--title", default="")
     ap.add_argument("--mesh", type=Path, help="admitted original GLB; requires a matching source mesh_frame")
     ap.add_argument("--roles", help="optional JSON {zone: role} to colour zones by room type; "
-                                    "default uses building_geometry zone_meta, then legacy correction lookup")
+                                    "default reads roles from the display geometry zone_meta")
     args = ap.parse_args()
     j = Path(args.json)
     data = load_viewer_geometry(j)

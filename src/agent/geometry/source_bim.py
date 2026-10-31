@@ -1,7 +1,7 @@
 """Solver-independent source BIM: full boundaries, contact regions and openings.
 
 Contact regions describe actual adjacency. They never split source boundaries
-or create EnergyPlus surfaces. The viewer is a separate, disposable projection.
+or invent physical partitions. The viewer is a separate, disposable projection.
 """
 from __future__ import annotations
 
@@ -14,15 +14,14 @@ from shapely.affinity import translate
 from shapely.geometry import Polygon, box, LineString, Point
 from shapely.ops import unary_union
 
-from src.agent.correction.schema import CorrectedGeometry, SourceOpening
-from src.agent.correction.cell_geometry import cell_polygon
-from src.agent.geometry.build import verify_geometry_input
+from src.agent.geometry_model.schema import GeometryInput, SourceOpening
+from src.agent.geometry_model.cells import cell_polygon
 from src.agent.geometry.capability import require_supported_geometry_contract, schema_supports, FEATURE_CELL_POLYGON, FEATURE_SIMPLE_POLYGON
-from src.agent.geometry.modelling import Surface, _FACADE_NORMAL, _legacy_cardinal_window_verts, _newell, _orient
-from src.agent.geometry.openings import _frame, _lift, _project
+from src.agent.geometry.surfaces import FACADE_NORMALS, cardinal_window_vertices, polygon_normal, orient_vertices
+from src.agent.geometry.surfaces import wall_frame, lift_from_wall, project_to_wall
 from src.agent.geometry.source_model import _digest, source_primitives
 
-# Numerical comparison only, not a drawing snap distance or minimum EP edge.
+# Numerical comparison only; never a drawing snap distance.
 EPS = 1e-7
 
 
@@ -65,15 +64,15 @@ def _parts(shape):
 
 def _on_wall(vertices, boundary):
     origin = boundary.vertices[0][:2]
-    direction, _ = _frame(origin, boundary.vertices[1][:2])
+    direction, _ = wall_frame(origin, boundary.vertices[1][:2])
     return _project_on_wall(vertices, origin, direction)
 
 
 def _project_on_wall(vertices, origin, direction):
-    # Do not use the EP realization tolerance for source coplanarity.
+    # Source coplanarity uses the tighter comparison tolerance.
     if any(abs((v[0]-origin[0])*direction[1] - (v[1]-origin[1])*direction[0]) > EPS for v in vertices):
         return None
-    return _project(vertices, origin, direction)
+    return project_to_wall(vertices, origin, direction)
 
 
 def _contained(vertices, boundary):
@@ -87,7 +86,7 @@ def _wall_polygon(boundary, *, origin=None, direction=None):
     """Project the complete physical wall, including any shell interior rings."""
     if origin is None:
         origin = boundary.vertices[0][:2]
-        direction, _ = _frame(origin, boundary.vertices[1][:2])
+        direction, _ = wall_frame(origin, boundary.vertices[1][:2])
     exterior = _project_on_wall(boundary.vertices, origin, direction)
     holes = [_project_on_wall(ring, origin, direction) for ring in boundary.holes]
     if exterior is None or any(hole is None for hole in holes):
@@ -144,9 +143,9 @@ def _contacts(boundaries):
         vertices = boundary.vertices
         if boundary.geometry_type == "wall":
             origin = vertices[0][:2]
-            direction, _ = _frame(origin, vertices[1][:2])
+            direction, _ = wall_frame(origin, vertices[1][:2])
             walls[boundary.id] = (
-                _newell(vertices), origin, direction,
+                polygon_normal(vertices), origin, direction,
                 _wall_polygon(boundary, origin=origin, direction=direction),
                 min(v[2] for v in vertices), max(v[2] for v in vertices),
             )
@@ -172,7 +171,7 @@ def _contacts(boundaries):
             if projected is None:
                 continue
             contact = parent.intersection(projected)
-            lift = lambda ring: _lift(list(ring), origin, direction)
+            lift = lambda ring: lift_from_wall(list(ring), origin, direction)
         elif {a.geometry_type, b.geometry_type} == {"floor", "ceiling"}:
             z, polygon_a, bounds_a = horizontal[a.id]
             z_b, polygon_b, bounds_b = horizontal[b.id]
@@ -203,9 +202,9 @@ def _contacts(boundaries):
     return relations
 
 
-def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular", window_host_proof=None,
+def build_source_bim(geom: GeometryInput, *, capability_profile="orthogonal_polygon",
                      enclosure_declaration: dict | None = None, wall_readings=None) -> dict:
-    """Generate geometric source objects without cut/pair, physics or IDF calls.
+    """Generate source spaces, complete boundaries, contacts and explicit openings.
 
     Invalid base space geometry fails explicitly. Unresolved openings remain in
     the candidate's unbuilt inventory and block source readiness, while allowing
@@ -213,7 +212,6 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
     """
     require_supported_geometry_contract(geom, capability_profile)
     simple_polygon = schema_supports(geom, FEATURE_SIMPLE_POLYGON)
-    geom, proof_artifact = verify_geometry_input(geom, window_host_proof)
     findings = []
 
     def fail(code, **evidence):
@@ -249,8 +247,7 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
             if not simple_polygon and any(abs(a[0]-b[0]) > EPS and abs(a[1]-b[1]) > EPS for a,b in zip(coords, coords[1:]+coords[:1])):
                 raise ValueError(f"space {cell.id}: non-orthogonal source geometry is not supported yet")
 
-    # Reuse polygon validity/bounds checks, without the legacy EP kernel's
-    # configurable minimum edge length. Small valid source spaces stay present.
+    # Validate rings without a minimum edge length; small valid spaces stay present.
     from src.agent.geometry.reader_wall_metadata import thickness_breakpoints
     wall_breakpoints = thickness_breakpoints(wall_readings or [])
     spaces, boundaries, polygons, by_space = source_primitives(
@@ -333,7 +330,6 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
         fail("source.opening_unbuilt", opening_id=source.id, reason=message,
              **({"height_host_diagnostic": diagnostic} if diagnostic is not None else {}))
 
-    resolutions = {r.window_id: r for r in proof_artifact.claims.resolutions} if proof_artifact else {}
     opening_segment_groups = {}
     used_aperture_ids = {o.id for o in geom.openings} | {str(w.id) for w in geom.windows}
     for window in geom.windows:
@@ -344,7 +340,7 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
         seen_ids.add(wid)
         owner = next((s for s in spaces if s.id == window.room), None)
         owner_floor = next((f for f in geom.floors if str(getattr(f, "id", None) or f.name) == owner.floor_id), None) if owner else None
-        if owner_floor is None or (getattr(window, "floor_id", None) or window.floor) not in {owner.floor_id, owner_floor.name}:
+        if owner_floor is None or window.floor not in {owner.floor_id, owner_floor.name}:
             reject(window, "window floor and source room disagree")
             continue
         if (len(window.span) != 2 or len(window.z) != 2 or
@@ -353,19 +349,15 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
             reject(window, "window span/height must be positive finite intervals")
             continue
         candidates, partials = [], []
-        resolution = resolutions.get(wid)
-        want = resolution.segment_outward_normal if resolution else _FACADE_NORMAL[window.facade.lower()]
+        want = FACADE_NORMALS[window.facade.lower()]
         for bid in by_space.get(window.room, []):
             boundary = boundaries[bid]
             if boundary.geometry_type != "wall":
                 continue
-            normal = _newell(boundary.vertices)
+            normal = polygon_normal(boundary.vertices)
             if normal[0]*want[0] + normal[1]*want[1] < 1-EPS:
                 continue
-            if resolution:
-                vertices = [[p.x, p.y, p.z] for p in resolution.clamped_vertices]
-            else:
-                vertices = _legacy_cardinal_window_verts(window, Surface(bid, boundary.space_id, "Wall", boundary.vertices, "Outdoors"))
+            vertices = cardinal_window_vertices(window, boundary.vertices)
             if _contained(vertices, boundary) and exterior(vertices, boundary):
                 candidates.append((boundary, vertices))
             elif wall_breakpoints.get(owner.floor_id):
@@ -373,9 +365,9 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
                 if shape is not None:
                     overlap = shape.intersection(_on_wall(boundary.vertices, boundary))
                     origin = boundary.vertices[0][:2]
-                    direction, _ = _frame(origin, boundary.vertices[1][:2])
+                    direction, _ = wall_frame(origin, boundary.vertices[1][:2])
                     for part in _parts(overlap):
-                        clipped = _lift(list(part.exterior.coords)[:-1], origin, direction)
+                        clipped = lift_from_wall(list(part.exterior.coords)[:-1], origin, direction)
                         if exterior(clipped, boundary):
                             partials.append((boundary, clipped, vertices))
         if not candidates and partials:
@@ -403,7 +395,7 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
             used_aperture_ids.add(identity)
             openings.append(SourceOpening(id=identity, kind="window", host_boundary_id=boundary.id,
                             space_ids=[boundary.space_id], exterior=True, vertices=vertices,
-                            source_refs=[f"correction:window/{quote(wid, safe='')}"]))
+                            source_refs=[f"geometry:window/{quote(wid, safe='')}"]))
             bindings[identity] = [boundary.id]
             if wid in opening_segment_groups:
                 opening_segment_groups[wid].append(identity)
@@ -478,13 +470,13 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
     payload = {
         "schema_version": "source_bim_v2",
         "source_geometry_sha256": _digest(geom.model_dump(mode="json")),
-        "coordinate_system": {"units": "m", "frame": "corrected building coordinates", "up_axis": "Z",
-                              "north_axis": getattr(geom, "north_axis", None).model_dump(mode="json") if getattr(geom, "north_axis", None) else None},
+        "coordinate_system": {"units": "m", "frame": "building coordinates", "up_axis": "Z",
+                              "north_axis": None},
         "floors": [{"id":fid, "name":f.name, "z_floor":f.z_floor, "height":f.ceiling_height,
                     "footprint": list(getattr(f, "footprint").vertices) if getattr(f, "footprint", None)
                     else [[geom.footprint_x[0],geom.footprint_y[0]], [geom.footprint_x[1],geom.footprint_y[0]],
                           [geom.footprint_x[1],geom.footprint_y[1]], [geom.footprint_x[0],geom.footprint_y[1]]],
-                    "footprint_basis": "per_floor_correction" if getattr(f,"footprint",None) else "legacy_common_footprint",
+                    "footprint_basis": "per_floor_footprint" if getattr(f,"footprint",None) else "shared_footprint",
                     **({"footprint_holes": [[list(point) for point in ring] for ring in f.footprint.holes]}
                        if getattr(getattr(f, 'footprint', None), 'holes', []) else {}),
                     **({"footprint_boundary_path": [use.model_dump(mode='json') for use in f.footprint.boundary_path]}
@@ -498,8 +490,8 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
         "opening_hosts": bindings,
         "connections": connections,
         "unbuilt_openings": unbuilt,
-        "assumptions": ["Correction cell rings represent physical source spaces with horizontal floor/ceiling boundaries.",
-                        "Contacts describe adjacency, not traversability or EnergyPlus surface pairing.",
+        "assumptions": ["Input cell rings represent physical source spaces with horizontal floor/ceiling boundaries.",
+                        "Contacts describe adjacency; traversability requires an explicit opening.",
                         "Only explicit openings are represented; absent observations do not establish a solid wall.",
                         "Source boundary identity follows cell identity and ring order; topology edits need identity migration."],
         "corrections": geom.corrections, "conflicts": geom.conflicts, "unsupported": geom.unsupported,
@@ -507,7 +499,7 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
                        "numerical_tolerance_m": EPS,
                        "scope": "source geometry, contacts and explicit opening hosts",
                        "not_evaluated": ["drawing partition fidelity and completeness", "unobserved openings",
-                                         "voids and false slabs", "thermal properties and solver acceptance"]},
+                                         "voids and false slabs"]},
     }
     if opening_segment_groups:
         payload['opening_segment_groups'] = opening_segment_groups
@@ -521,7 +513,7 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
         if any(space.vertical_sections for space in spaces):
             payload['geometry_capability']['scope'] += '; explicit contiguous horizontal sections form one connected space with stepped enclosure'
             payload['geometry_capability']['vertical_sections'] = 'absolute_z_contiguous_sections_v1'
-            payload['assumptions'][0] = 'Each correction cell represents one physical source space; optional horizontal sections define its stepped volume, while its polygon/holes are the full XY projection.'
+            payload['assumptions'][0] = 'Each input cell represents one physical source space; optional horizontal sections define its stepped volume, while its polygon/holes are the full XY projection.'
         if geom.boundary_curves:
             from src.agent.geometry.source_curves import source_curve_origin
             payload['boundary_curves'] = {key: value.model_dump(mode='json') for key, value in geom.boundary_curves.items()}
@@ -573,9 +565,8 @@ def build_source_bim(geom: CorrectedGeometry, *, capability_profile="rectangular
 def source_view_geometry(source: dict) -> dict:
     """Project full source boundaries into the existing viewer's display schema.
 
-    Display names map straight back to source IDs. No thermal boundary condition
-    or reciprocal EP pair is synthesized. Coincident display overlap is handled
-    by the renderer, never by changing the authoritative source.
+    Display names map straight back to source IDs. The renderer handles coincident
+    display overlap without changing the authoritative source.
     """
     expected = _digest({k:v for k,v in source.items() if k != "source_model_sha256"})
     if source.get("schema_version") not in {"source_bim_v2", "source_bim_v3"} or source.get("source_model_sha256") != expected:
@@ -596,7 +587,7 @@ def source_view_geometry(source: dict) -> dict:
         for i, bid in enumerate(hosts):
             owner = boundaries[bid]["space_id"]
             apertures.append({"name": names[i], "parent": bid,
-                              "verts": _orient(opening["vertices"], _newell(boundaries[bid]["vertices"])),
+                              "verts": orient_vertices(opening["vertices"], polygon_normal(boundaries[bid]["vertices"])),
                               "source_opening_id": opening["id"], "kind": opening["kind"], "space_id": owner,
                               "other_space_id": next((s for s in opening["space_ids"] if s != owner), None),
                               "state": opening["connectivity"], "partner": names[1-i] if len(names)==2 else ""})
@@ -638,9 +629,9 @@ def _display_parts(source):
             continue
         if boundary["geometry_type"] == "wall":
             origin = vertices[0][:2]
-            direction, _ = _frame(origin, vertices[1][:2])
-            project = lambda ring: _project(ring, origin, direction)
-            lift = lambda ring: _lift(list(ring), origin, direction)
+            direction, _ = wall_frame(origin, vertices[1][:2])
+            project = lambda ring: project_to_wall(ring, origin, direction)
+            lift = lambda ring: lift_from_wall(list(ring), origin, direction)
         else:
             z = vertices[0][2]
             project = lambda ring: Polygon([v[:2] for v in ring])

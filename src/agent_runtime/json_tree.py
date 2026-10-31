@@ -52,7 +52,7 @@ def store_json_tree(value, store):
 
 
 def read_json_tree(ref, read_blob):
-    """Read a tree or historical plain JSON, checking every referenced hash."""
+    """Read a shared tree or its small inline JSON form, checking every hash."""
     from .store import json_bytes
 
     document = json.loads(read_blob(ref))

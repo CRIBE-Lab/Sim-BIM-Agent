@@ -56,7 +56,7 @@ SCOPES = (
 )
 _REFRESH_SKEW_SECONDS = 60.0
 _SCHEMA_VERSION = 1
-_DPAPI_ENTROPY = b"EnergyPlus-Agent/openai-subscription/v1"
+_DPAPI_ENTROPY = b"Sim-BIM-Agent/openai-subscription/v1"
 _UNUSABLE_REFRESH_ERRORS = frozenset(
     {
         "invalid_grant",
@@ -174,10 +174,10 @@ def _default_directory() -> Path:
         local_app_data = os.environ.get("LOCALAPPDATA")
         if not local_app_data:
             raise SubscriptionAuthError("LOCALAPPDATA is required for subscription login.")
-        return Path(local_app_data) / "EnergyPlus-Agent" / "openai-subscription"
+        return Path(local_app_data) / "Sim-BIM-Agent" / "openai-subscription"
     data_home = os.environ.get("XDG_DATA_HOME")
     base = Path(data_home) if data_home else Path.home() / ".local" / "share"
-    return base / "EnergyPlus-Agent" / "openai-subscription"
+    return base / "Sim-BIM-Agent" / "openai-subscription"
 
 
 def _default_protector() -> _Protector:

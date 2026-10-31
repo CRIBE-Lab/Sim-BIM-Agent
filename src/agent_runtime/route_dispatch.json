@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "basis": "2026-10-07 sm21 accepted five concurrent requests; sixth received 1302. Night runs accepted six to eight. Start at five, recover cautiously; this is a local policy, not a service guarantee.",
+  "basis": "Observed on 2026-10-07: five concurrent requests succeeded and a sixth received rate-limit code 1302; other requests supported six to eight. Start at five and recover cautiously. This is a conservative local policy, not a service guarantee.",
   "routes": {
     "glm-subscription-anthropic": {
       "initial_concurrency": 5,

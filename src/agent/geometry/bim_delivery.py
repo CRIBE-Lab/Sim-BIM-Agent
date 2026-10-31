@@ -160,9 +160,8 @@ def summarize_delivery(source: dict, reviews: list[dict]) -> dict:
         facade_floor = facade_floor_rows[floor_id]
         available_facades = [row["facade"] for row in facade_floor["facades"]]
         for kind in _KINDS:
-            # A review with no facade is the original plan-style whole
-            # floor/kind claim.  It keeps its old behavior exactly; facade
-            # reviews are assembled separately below.
+            # A review with no facade covers the whole floor/kind scope.
+            # Facade-specific reviews are assembled separately below.
             refs = scope_refs.get((floor_id, kind, None), [])
             effective_complete, effective_partial, superseded = _effective_scope_refs(refs)
             facade_rows = []

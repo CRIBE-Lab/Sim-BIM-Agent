@@ -136,7 +136,7 @@ def apply_continuous_spaces(plan, instances, groups, floors, windows, openings):
 def expand_separated_spaces(plan, instances, groups, floors, continuity):
     """Retain only explicitly declared cap interfaces; never infer an exception."""
     from src.agent.geometry.parametric_proposal import fields, identifier, strings
-    from src.agent.correction.schema import VerticalSeparation
+    from src.agent.geometry_model.schema import VerticalSeparation
     declarations = plan.get("separated_spaces", [])
     if not isinstance(declarations, list) or len(declarations) > 100:
         raise ValueError("separated_spaces must be a list of at most 100 declarations")

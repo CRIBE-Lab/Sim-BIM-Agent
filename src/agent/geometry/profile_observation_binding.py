@@ -224,7 +224,7 @@ def resolve_observations(
 ) -> tuple[dict, list]:
     """Replace explicit pixel-profile references in facade coordinate slots.
 
-    Legacy numeric coordinates and all unrelated metadata are copied unchanged.
+    Explicit numeric coordinates and unrelated metadata are copied unchanged.
     Profile files are supplied by ``load_profile`` so this function performs no
     filesystem access.  Each profile ID is loaded at most once per invocation.
     """

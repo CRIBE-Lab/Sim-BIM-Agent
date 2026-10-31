@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from .base import ContractModel, NonEmptyStr, Sha256
 
@@ -16,17 +16,7 @@ class HashedBlobRef(ContractModel):
     sha256: Sha256
 
 
-class HistoricalBlobHashMissing(ContractModel):
-    kind: Literal["historical_hash_missing"] = "historical_hash_missing"
-    uri: NonEmptyStr
-    media_type: NonEmptyStr
-    reason: NonEmptyStr
-
-
-BlobRef = Annotated[
-    HashedBlobRef | HistoricalBlobHashMissing,
-    Field(discriminator="kind"),
-]
+BlobRef = HashedBlobRef
 
 
 class SourceRef(ContractModel):
@@ -38,7 +28,6 @@ class SourceRef(ContractModel):
         "runtime",
         "tool",
         "history",
-        "external_coordinator",
         "generated",
     ]
     locator: NonEmptyStr

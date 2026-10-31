@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,6 +34,7 @@ def doctor():
 def demo(output: Path):
     """Exercise the real local BIM tools with a clearly synthetic two-room plan."""
     from src.agent_runtime.run_paths import resolve_run_output
+    from src.agent.bim_inputs import prepare_bim_inputs
     from PIL import Image, ImageDraw
     from scripts.tool_scripts.bim_agent_guidance import REFERENCES
     from scripts.tool_scripts.run_bim_agent import Toolkit
@@ -43,21 +44,18 @@ def demo(output: Path):
     resolve_run_output(Path(output.name), repository_root=ROOT, run_root=output.parent)
     if output.exists():
         raise ValueError("Choose a new output directory; existing results are preserved")
-    images = output / "images"
-    images.mkdir(parents=True)
-    picture = Image.new("RGB", (12, 8), "white")
-    drawing = ImageDraw.Draw(picture)
-    drawing.rectangle((1, 1, 11, 7), outline="black")
-    drawing.line((6, 1, 6, 7), fill="black")
-    image_path = images / "plan.png"
-    picture.save(image_path)
-    manifest = {"images": {"plan.png": {"size": [12, 8],
-                "sha256": hashlib.sha256(image_path.read_bytes()).hexdigest()}},
-                "provider": "offline deterministic synthetic demonstration",
-                "input_mode": "synthetic_offline_demo",
-                "generator": "sim-bim synthetic offline demo",
-                "scope": "Synthetic two-room offline demonstration; not building reconstruction",
-                "only_input": "synthetic drawing and declaration; no GT or prior run"}
+    with tempfile.TemporaryDirectory(prefix="sim-bim-demo-") as temporary:
+        images = Path(temporary)
+        picture = Image.new("RGB", (12, 8), "white")
+        drawing = ImageDraw.Draw(picture)
+        drawing.rectangle((1, 1, 11, 7), outline="black")
+        drawing.line((6, 1, 6, 7), fill="black")
+        picture.save(images / "plan.png")
+        manifest = prepare_bim_inputs(output, images_path=images, mesh_path=None,
+            building_input_path=None, image_kind="drawings", max_candidates=1,
+            scope="Synthetic two-room offline demonstration; not building reconstruction")
+    manifest.update(input_mode="synthetic_offline_demo", generator="sim-bim synthetic offline demo",
+                    only_input="synthetic drawing and declaration")
     (output / "inputs.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     reference = REFERENCES["plan_partition"]
     plan = json.JSONDecoder().raw_decode(reference[reference.index("{"):])[0]

@@ -1,8 +1,8 @@
 """Run one role on admitted case inputs using the frozen BIM tool service.
 
 CLI: python -m src.agent.runtime_entry --help
-Real requests require an explicit live provider. Tool preparation never starts
-the historical subscription runner.
+Real requests require an explicit live provider. Preparation freezes inputs
+and configures the native BIM tool service.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def prepare_inputs(output: Path, *, images: Path | None, mesh: Path | None,
                    max_candidates: int, floor_plan_images: list[str] | None = None,
                    started_epoch: float | None = None,
                    seconds: float | None = None, process_reviews: bool = False) -> tuple[Path, str, str]:
-    """Freeze originals through the same admission function as Claude Code."""
+    """Freeze and validate original inputs through the shared admission function."""
     from src.agent.bim_inputs import prepare_bim_inputs
     if started_epoch is None and seconds is not None:
         raise ValueError("seconds requires started_epoch")
@@ -150,12 +150,12 @@ async def execute(args) -> dict:
         max_consecutive_truncations=args.max_consecutive_truncations,
         max_total_truncations=args.max_total_truncations,
         summary_every=args.summary_every)
-    context_values = {"active_window_messages": args.context_window,
+    context_values = {
         # Preserve sent state in every new token-managed conversation. Moving
         # even an unchanged state to the tail rewrites the previous prefix.
-        "append_state_history": args.context_window is None,
+        "append_state_history": True,
         "compact_at_tokens": args.compact_at_tokens,
-        "large_result_bytes": args.large_result_bytes, "max_images": args.max_images,
+        "max_images": args.max_images,
         "image_history_batches": getattr(args, "image_history_batches", None),
         "max_image_bytes": args.max_image_bytes}
     context_policy = ContextPolicy(**{key: value for key, value in context_values.items()
@@ -302,7 +302,7 @@ async def execute(args) -> dict:
                         "src/agent/runtime_mesh_workers.py", "src/agent/runtime_mesh_evidence.py",
                         "src/agent/input_image_view.py", "src/agent/runtime_mesh_image_views.py",
                         "src/agent/runtime_mesh_continuation.py",
-                        "src/agent/correction", "src/agent/execution"))
+                        "src/agent/geometry_model", "src/agent/execution", "src/configs"))
                 # A refused resume must not replace the original run's evidence.
                 # The runtime checks current versions against its saved checkpoint.
                 if not args.resume:
@@ -430,7 +430,7 @@ def parser():
                    help="explicit absolute run-storage root; defaults to this worktree")
     p.add_argument("--images", type=Path)
     p.add_argument("--floor-plan-image", dest="floor_plan_images", action="append",
-                   help="Explicit expected floor-plan filename; repeat for all floors (same as Claude Code)")
+                   help="Explicit expected floor-plan filename; repeat for all floors")
     p.add_argument("--mesh", type=Path)
     p.add_argument("--mesh-workers", type=int, default=0, metavar="MAX_CONCURRENT",
                    help="enable optional same-route read-only mesh workers under the shared run budget")
@@ -478,10 +478,8 @@ def parser():
                    help="maximum output-limit recoveries across this root run, including children and summaries")
     p.add_argument("--context", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--context-tokens", type=int, help="optional explicit local capacity; omit to adapt to the model window with recoverable context compaction")
-    p.add_argument("--context-window", type=int, help="explicit legacy message-window replay; production defaults to token compaction")
     p.add_argument("--compact-at-tokens", type=int,
                    help="optional explicit compaction threshold; omit for adaptive model-window pressure management")
-    p.add_argument("--large-result-bytes", type=int)
     p.add_argument("--max-images", type=int, help="optional image count target at compaction; unset by default")
     p.add_argument("--image-history-batches", type=int,
                    help="retain recent tool-image batches and exact references to older images; initial and undelivered images stay visible")

@@ -13,7 +13,6 @@ import copy
 import hashlib
 import inspect
 import json
-from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
 from pydantic import Field, JsonValue, field_validator, model_validator
@@ -66,14 +65,11 @@ _CHECKLIST_CATEGORIES: tuple[StateCategory, ...] = (
 class ContextPolicy(ContractModel):
     """Deterministic request projection policy."""
 
-    # Message windows exist only for explicit historical replay. Production
-    # defaults preserve an append-only prefix until this input-token threshold.
-    active_window_messages: int | None = Field(default=None, ge=1)
+    # Preserve an append-only prefix until context pressure requires compaction.
     # None delegates pressure/retention to the runtime's model window and
     # observed request growth. Explicit thresholds remain useful for tests.
     compact_at_tokens: int | None = Field(default=None, ge=1)
     compact_to_ratio: float = Field(default=0.6, gt=0, lt=1)
-    large_result_bytes: int = Field(default=8_192, ge=1)
     pinned_tags: tuple[NonEmptyStr, ...] = ()
     preserve_initial_messages: int = Field(default=2, ge=0)
     max_images: int | None = Field(default=None, ge=1)
@@ -93,8 +89,8 @@ class ContextPolicy(ContractModel):
     # Sent state is part of the request prefix for caching and signed histories.
     # Commit actually sent state snapshots before their response, then append
     # only changed state. Ordinary projections and estimators stay read-only.
-    # Keep the serialized legacy default: old checkpoints omit this field.
-    # Production entry enables it for new token-managed conversations.
+    # Single-model entry enables append-only state for cache-stable conversations.
+    # Role workflows may retain an explicit mutable state tail.
     append_state_history: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @field_validator("pinned_tags")
@@ -103,14 +99,6 @@ class ContextPolicy(ContractModel):
         if len(value) != len(set(value)):
             raise ValueError("pinned context tags must be unique")
         return value
-
-    @model_validator(mode="after")
-    def image_history_uses_token_projection(self):
-        if self.image_history_batches is not None and self.active_window_messages is not None:
-            raise ValueError("image_history_batches requires token context projection")
-        if self.append_state_history and self.active_window_messages is not None:
-            raise ValueError("append_state_history requires token context projection")
-        return self
 
 
 def context_image_tool_spec() -> dict:
@@ -243,12 +231,6 @@ class ContextProjection(ContractModel):
 SummaryCallback = Callable[
     [SummaryRequest], SummaryCandidate | Awaitable[SummaryCandidate]
 ]
-
-
-@dataclass(frozen=True)
-class _ProjectedRecord:
-    record: HistoryRecord
-    message: dict
 
 
 class ContextManager:
@@ -551,7 +533,7 @@ class ContextManager:
         # An explicit retrieval is a one-request exact pin.  It survives a
         # checkpoint and is consumed only after a valid projection is built.
         self._retrieval_pins.add(key)
-        if self.policy.active_window_messages is None and append_to_history:
+        if append_to_history:
             # Explicit retrieval appends bytes at the end; it never reinserts
             # an old tool interaction ahead of the cached conversation prefix.
             self.append({"role": "user", "content": [
@@ -639,8 +621,7 @@ class ContextManager:
                     blob=payload.summary, event_id=event.event_id)
                 self._last_compaction = {"history_ids": identities, "message": message,
                     "source": source.model_dump(mode="json"), "event_id": event.event_id}
-                if self.policy.active_window_messages is None:
-                    self._archived_history_ids.update(identities)
+                self._archived_history_ids.update(identities)
                 applied += 1
                 continue
             if details.get("kind") != "validated_model_summary" or event.event_id in represented_events:
@@ -788,120 +769,11 @@ class ContextManager:
         force_compact: bool = False,
         undelivered_image_event_ids: tuple[str, ...] = (),
     ) -> ContextProjection:
-        if self.policy.active_window_messages is None:
-            return self._project_by_tokens(required_tags=required_tags,
-                required_view_ids=required_view_ids, consume_retrievals=consume_retrievals,
-                token_estimator=token_estimator, request_token_estimator=request_token_estimator,
-                pressure_tokens=pressure_tokens, target_tokens=target_tokens, force_compact=force_compact,
-                undelivered_image_event_ids=undelivered_image_event_ids)
-        required = set(required_tags) | set(self.policy.pinned_tags)
-        exact_retrievals = set(self._retrieval_pins)
-        selected, omitted = self._select_history(
-            required, set(required_view_ids), exact_retrievals
-        )
-        image_decisions = self._decide_images(
-            selected, required, set(required_view_ids), exact_retrievals
-        )
-        decision_event_ids = list(self._record_image_decisions(image_decisions))
-
-        newest_large_result: dict[str, str] = {}
-        for record in selected:
-            if record.kind == "tool_result" and _message_content_size(record.message) >= self.policy.large_result_bytes:
-                newest_large_result[_message_content_sha(record.message)] = record.history_id
-        referenced_results = [
-            record
-            for record in selected
-            if record.kind == "tool_result"
-            and _message_content_size(record.message) >= self.policy.large_result_bytes
-            and newest_large_result[_message_content_sha(record.message)] != record.history_id
-        ]
-        if referenced_results:
-            event = self._record_result_reference_compaction(
-                referenced_results, newest_large_result
-            )
-            decision_event_ids.append(event.event_id)
-
-        projected: list[_ProjectedRecord] = []
-        last_image_occurrence: dict[str, str] = {}
-        for record in selected:
-            for key in record.image_keys:
-                image = self._images[key]
-                if image.active:
-                    last_image_occurrence[image.image.sha256] = record.history_id
-        sent_image_hashes: set[str] = set()
-        for record in selected:
-            projected.append(
-                _ProjectedRecord(
-                    record,
-                    self._project_message(
-                        record,
-                        newest_large_result,
-                        last_image_occurrence,
-                        sent_image_hashes,
-                    ),
-                )
-            )
-
-        compacted = [r for r in omitted if r.source.event_id is not None]
-        if compacted:
-            event, compact_message, compact_source = self._record_deterministic_compaction(compacted)
-            if compact_message is not None:
-                if event is not None:
-                    decision_event_ids.append(event.event_id)
-                synthetic = HistoryRecord(
-                    history_id=f"projection-{compact_source.event_id}",
-                    message=compact_message,
-                    source=compact_source,
-                    message_blob=self.store.put_json(compact_message),
-                    kind="summary",
-                    summary_slot="deterministic-compaction",
-                    content_sha256=hashlib.sha256(json_bytes(compact_message)).hexdigest(),
-                )
-                # Appending at a group boundary cannot split assistant tool_calls
-                # from any of their tool replies.
-                projected.append(_ProjectedRecord(synthetic, compact_message))
-
-        checklist = self.checklist()
-        model_state = self.model_state()
-        if model_state:
-            state_message = {
-                "role": "user",
-                "content": "Current runtime state (machine generated; epistemic status is authoritative): "
-                + json.dumps(
-                    model_state,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ),
-            }
-            state_ref = self.store.put_json(state_message)
-            state_source = SourceRef(
-                source_id="context-current-state",
-                source_kind="generated",
-                locator=state_ref.uri,
-                blob=state_ref,
-            )
-            synthetic = HistoryRecord(
-                history_id="projection-current-state",
-                message=state_message,
-                source=state_source,
-                message_blob=state_ref,
-                content_sha256=hashlib.sha256(json_bytes(state_message)).hexdigest(),
-            )
-            projected.append(_ProjectedRecord(synthetic, state_message))
-
-        messages = [item.message for item in projected]
-        _validate_projected_tool_protocol(tuple(messages))
-        if consume_retrievals:
-            self._retrieval_pins.difference_update(exact_retrievals)
-        return ContextProjection(
-            messages=messages,
-            sources=[item.record.source for item in projected],
-            checklist=checklist,
-            decision_event_ids=tuple(decision_event_ids),
-            included_history_ids=tuple(r.history_id for r in selected),
-            omitted_history_ids=tuple(r.history_id for r in omitted),
-        )
+        return self._project_by_tokens(required_tags=required_tags,
+            required_view_ids=required_view_ids, consume_retrievals=consume_retrievals,
+            token_estimator=token_estimator, request_token_estimator=request_token_estimator,
+            pressure_tokens=pressure_tokens, target_tokens=target_tokens, force_compact=force_compact,
+            undelivered_image_event_ids=undelivered_image_event_ids)
 
     def model_state(self) -> list[dict]:
         """Small mutable tail; the full source-bearing state stays in checkpoints.
@@ -1014,6 +886,19 @@ class ContextManager:
 
         required = set(required_tags) | set(self.policy.pinned_tags)
         views = set(required_view_ids)
+        latest_summaries = {r.summary_slot: r.history_id for r in self._history if r.kind == "summary"}
+        obsolete_summaries = {r.history_id for r in self._history if r.kind == "summary" and (
+            latest_summaries[r.summary_slot] != r.history_id or any(
+                key not in self._state or not self._state[key].active or self._state[key].revision != revision
+                for key, revision in r.summary_state_revisions.items()))}
+        events = []
+        newly_obsolete = obsolete_summaries - self._archived_history_ids
+        if newly_obsolete:
+            self._archived_history_ids.update(newly_obsolete)
+            event, _, _ = self._record_deterministic_compaction(
+                [r for r in self._history if r.history_id in self._archived_history_ids])
+            if event:
+                events.append(event.event_id)
         selected = [r for r in self._history if r.history_id not in self._archived_history_ids]
         image_history_ids = (self._retained_image_history(selected, required, views,
             set(undelivered_image_event_ids)) if self.policy.image_history_batches is not None else None)
@@ -1025,7 +910,11 @@ class ContextManager:
                 # Keep initial guidance/user input, then a stable compacted
                 # prefix, then the surviving chronological interactions.
                 initial_ids = {r.history_id for r in self._history[:self.policy.preserve_initial_messages]}
-                index = sum(r.history_id in initial_ids for r in records)
+                index = 0
+                for group in _interaction_groups(records):
+                    if not any(r.history_id in initial_ids for r in group):
+                        break
+                    index += len(group)
                 messages.insert(index, notice["message"])
                 sources.insert(index, SourceRef.model_validate_json(json.dumps(notice["source"])))
             state_message = self._state_message(records)
@@ -1035,7 +924,6 @@ class ContextManager:
             return messages, sources
 
         messages, sources = assemble(selected, self._last_compaction)
-        events = []
         threshold = pressure_tokens if pressure_tokens is not None else self.policy.compact_at_tokens
         if force_compact or (threshold is not None and estimate(messages, sources) >= threshold):
             protected = {r.history_id for r in self._history[:self.policy.preserve_initial_messages]}
@@ -1242,7 +1130,7 @@ class ContextManager:
             raise ValueError("context checkpoint contains duplicate history IDs")
         if not manager._archived_history_ids <= set(history_ids):
             raise ValueError("context checkpoint archives unknown history")
-        if manager.policy.active_window_messages is None and manager._archived_history_ids != set(
+        if manager._archived_history_ids != set(
                 (manager._last_compaction or {}).get("history_ids", ())):
             raise ValueError("context checkpoint archived history differs from its recorded compaction")
         if manager._last_compaction:
@@ -1285,153 +1173,6 @@ class ContextManager:
             raise ValueError("context checkpoint has retrieval pins for unknown images")
         return manager
 
-    def _select_history(
-        self,
-        required_tags: set[str],
-        required_view_ids: set[str],
-        required_image_keys: set[str],
-    ) -> tuple[list[HistoryRecord], list[HistoryRecord]]:
-        keep: set[str] = {r.history_id for r in self._history[: self.policy.preserve_initial_messages]}
-        keep.update(r.history_id for r in self._history[-self.policy.active_window_messages :])
-        keep.update(r.history_id for r in self._history if required_tags & set(r.tags))
-        keep.update(
-            r.history_id
-            for r in self._history
-            if any(
-                required_tags & set(self._images[key].tags)
-                or self._images[key].view_id in required_view_ids
-                or key in required_image_keys
-                for key in r.image_keys
-            )
-        )
-
-        # If any member is selected, expand to the whole assistant/tool/image
-        # interaction group before removing obsolete standalone summaries.
-        for group in _interaction_groups(self._history):
-            if keep & {record.history_id for record in group}:
-                keep.update(record.history_id for record in group)
-
-        # Only the newest summary in a slot is useful in the request projection.
-        newest_summary: dict[str, str] = {}
-        for record in self._history:
-            if record.summary_slot:
-                newest_summary[record.summary_slot] = record.history_id
-        for record in self._history:
-            if record.summary_slot and newest_summary[record.summary_slot] != record.history_id:
-                keep.discard(record.history_id)
-            elif record.summary_state_revisions and any(
-                key not in self._state
-                or not self._state[key].active
-                or self._state[key].revision != revision
-                for key, revision in record.summary_state_revisions.items()
-            ):
-                keep.discard(record.history_id)
-
-        selected = [r for r in self._history if r.history_id in keep]
-        omitted = [r for r in self._history if r.history_id not in keep]
-        return selected, omitted
-
-    def _decide_images(
-        self,
-        selected: list[HistoryRecord],
-        required_tags: set[str],
-        required_view_ids: set[str],
-        required_image_keys: set[str],
-    ) -> dict[str, tuple[bool, str]]:
-        selected_keys = {key for record in selected for key in record.image_keys}
-        provisional: dict[str, tuple[bool, str]] = {}
-        for key, image in self._images.items():
-            keep = key in selected_keys and (
-                key in required_image_keys
-                or
-                image.view_id in required_view_ids
-                or bool(required_tags & set(image.tags))
-                or key in {k for record in selected[-self.policy.active_window_messages :] for k in record.image_keys}
-            )
-            reason = (
-                "explicit exact retrieval"
-                if key in required_image_keys
-                else "required view_id"
-                if image.view_id in required_view_ids
-                else "configured pinned tag"
-                if required_tags & set(image.tags)
-                else "active window"
-                if keep
-                else "outside the active request policy"
-            )
-            provisional[key] = (keep, reason)
-
-        # One view_id may have multiple byte versions.  A request that names
-        # only the view gets its newest registered version; exact recovery uses
-        # retrieve_image(view_id, sha256).
-        by_view: dict[str, list[str]] = {}
-        for key, (keep, _) in provisional.items():
-            if keep:
-                by_view.setdefault(self._images[key].view_id, []).append(key)
-        for keys in by_view.values():
-            if len(keys) <= 1:
-                continue
-            winner = max(keys, key=lambda key: self._images[key].registration_index)
-            pinned = [key for key in keys if key in required_image_keys]
-            if pinned:
-                winner = max(pinned, key=lambda key: self._images[key].registration_index)
-            for key in keys:
-                if key != winner:
-                    provisional[key] = (False, f"older view version replaced by {winner}")
-
-        # Duplicate bytes are sent once. Required view IDs win, then lexical key.
-        by_hash: dict[str, list[str]] = {}
-        for key, (keep, _) in provisional.items():
-            if keep:
-                by_hash.setdefault(self._images[key].image.sha256, []).append(key)
-        for keys in by_hash.values():
-            if len(keys) <= 1:
-                continue
-            winner = max(
-                keys,
-                key=lambda key: (
-                    key in required_image_keys,
-                    self._images[key].view_id in required_view_ids,
-                    self._images[key].registration_index,
-                ),
-            )
-            for key in keys:
-                if key != winner:
-                    provisional[key] = (False, f"duplicate image bytes retained as {winner}")
-        kept = [key for key, (keep, _) in provisional.items() if keep]
-        kept.sort(
-            key=lambda key: (
-                key in required_image_keys,
-                self._images[key].view_id in required_view_ids,
-                bool(required_tags & set(self._images[key].tags)),
-                self._images[key].registration_index,
-            ),
-            reverse=True,
-        )
-        used_bytes = 0
-        for index, key in enumerate(kept):
-            size = len(self.store.get_bytes(self._images[key].image))
-            exceeds_count = self.policy.max_images is not None and index >= self.policy.max_images
-            exceeds_bytes = (
-                self.policy.max_image_bytes is not None
-                and used_bytes + size > self.policy.max_image_bytes
-            )
-            if exceeds_count or exceeds_bytes:
-                if (
-                    key in required_image_keys
-                    or self._images[key].view_id in required_view_ids
-                    or bool(required_tags & set(self._images[key].tags))
-                ):
-                    raise ValueError(
-                        "required image exceeds the configured request image limits"
-                    )
-                provisional[key] = (
-                    False,
-                    "request image count limit" if exceeds_count else "request image byte limit",
-                )
-            else:
-                used_bytes += size
-        return provisional
 
     def _record_image_decisions(self, decisions: dict[str, tuple[bool, str]]) -> tuple[str, ...]:
         event_ids: list[str] = []
@@ -1503,7 +1244,7 @@ class ContextManager:
         }
         summary = self.store.put_json(description)
         details = self.store.put_json(
-            {"strategy": "exact duplicate/old summary/activity window", **description}
+            {"strategy": "token-budget compaction with complete retained evidence", **description}
         )
         before = self._projection_snapshot()
         compact_message = {
@@ -1534,100 +1275,6 @@ class ContextManager:
             "source": source.model_dump(mode="json"), "event_id": event.event_id}
         return event, compact_message, source
 
-    def _project_message(
-        self,
-        record: HistoryRecord,
-        newest_large_result: dict[str, str],
-        last_image_occurrence: dict[str, str],
-        sent_image_hashes: set[str],
-    ) -> dict:
-        result = copy.deepcopy(record.message)
-        if record.kind == "tool_result" and _message_content_size(result) >= self.policy.large_result_bytes:
-            content_sha = _message_content_sha(result)
-            full_record = newest_large_result.get(content_sha)
-            if full_record is not None and full_record != record.history_id:
-                result["content"] = json.dumps(
-                    {
-                        "context_reference": {
-                            "content_sha256": content_sha,
-                            "full_result_history_id": full_record,
-                            "reason": "exact repeated large tool result",
-                        }
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-        content = result.get("content")
-        if not isinstance(content, list):
-            return result
-        blocks = []
-        for block in content:
-            sha = _image_block_hash(block)
-            if sha is None:
-                blocks.append(block)
-                continue
-            matches = [
-                self._images[key]
-                for key in record.image_keys
-                if self._images[key].image.sha256 == sha
-            ]
-            active = [image for image in matches if image.active]
-            if (
-                active
-                and last_image_occurrence.get(sha) == record.history_id
-                and sha not in sent_image_hashes
-            ):
-                blocks.append(block)
-                sent_image_hashes.add(sha)
-            else:
-                identities = ",".join(sorted(image.key for image in matches))
-                reason = (
-                    "duplicate bytes already retained elsewhere in this request"
-                    if active
-                    else "outside active context"
-                )
-                blocks.append({
-                    "type": "text",
-                    "text": f"Image bytes omitted ({reason}); retrieve exact identity: {identities}",
-                })
-        result["content"] = blocks
-        return result
-
-    def _record_result_reference_compaction(
-        self,
-        records: list[HistoryRecord],
-        newest_large_result: dict[str, str],
-    ):
-        replacements = [
-            {
-                "history_id": record.history_id,
-                "event_id": record.source.event_id,
-                "content_sha256": _message_content_sha(record.message),
-                "full_result_history_id": newest_large_result[_message_content_sha(record.message)],
-            }
-            for record in records
-        ]
-        event_ids = self._event_ids(records)
-        if not event_ids:
-            raise ValueError("large-result compaction needs prior recorded event references")
-        summary = self.store.put_json({"kind": "large_result_references", "replacements": replacements})
-        details = self.store.put_json(
-            {"strategy": "exact content hash; preserve tool envelopes", "replacements": replacements}
-        )
-        return self.store.append(
-            self._context_payload(
-                action="compact",
-                reason="exact repeated large tool results replaced by hash references",
-                summary=summary,
-                replaced_event_ids=event_ids,
-                before=self._projection_snapshot(),
-                after=summary,
-                details=details,
-            ),
-            source_refs=tuple(
-                [*(record.source for record in records), self._blob_source("context-result-reference", details)]
-            ),
-        )
 
     def _records(self, history_ids: tuple[str, ...]) -> tuple[HistoryRecord, ...]:
         by_id = {record.history_id: record for record in self._history}
@@ -1660,12 +1307,7 @@ class ContextManager:
 
     @staticmethod
     def _context_payload(**values) -> ContextEventPayload:
-        # Stage 2 adds audit detail fields while retaining stage-0 compatibility.
-        supported = ContextEventPayload.model_fields
-        filtered = {key: value for key, value in values.items() if key in supported}
-        if values.get("action") == "retain_image" and "retain_image" not in _context_actions():
-            raise RuntimeError("ContextEventPayload must support retain_image before projection")
-        return ContextEventPayload(**filtered)
+        return ContextEventPayload(**values)
 
 
 def _without_audit_metadata(value):
@@ -1696,11 +1338,6 @@ def _display_issues(value, seen):
     else:
         return []
     return [issue for item in values for issue in _display_issues(item, seen)]
-
-
-def _context_actions() -> set[str]:
-    annotation = ContextEventPayload.model_fields["action"].annotation
-    return set(getattr(annotation, "__args__", ()))
 
 
 def _embedded_images(message: dict) -> tuple[tuple[str, bytes, str, str | None], ...]:
@@ -1737,14 +1374,6 @@ def _image_block_data(block) -> tuple[str, bytes, str, str | None] | None:
     if "detail" in image and (not isinstance(detail, str) or detail not in {"auto", "low", "high", "original"}):
         raise ValueError("unsupported context image detail")
     return hashlib.sha256(data).hexdigest(), data, media_type, detail
-
-
-def _message_content_sha(message: dict) -> str:
-    return hashlib.sha256(json_bytes(message.get("content"))).hexdigest()
-
-
-def _message_content_size(message: dict) -> int:
-    return len(json_bytes(message.get("content")))
 
 
 def _has_tool_images(message: dict) -> bool:

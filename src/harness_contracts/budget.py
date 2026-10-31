@@ -114,8 +114,8 @@ class BudgetSettlement(ContractModel):
     cost: CostEvidence
     image_tokens_estimate: int = Field(default=0, ge=0)
     reported_usage_includes_image_tokens: bool = False
-    # None preserves historical ledger semantics; new receipts supply the
-    # separately charged amount independently of what raw usage includes.
+    # An explicit extra charge overrides the estimate. Otherwise derive it
+    # from whether provider usage includes the image tokens.
     additional_image_tokens: int | None = Field(default=None, ge=0)
     token_overrun: int = Field(default=0, ge=0)
     # A rate-based charge, deliberately separate from actual/provider billing.

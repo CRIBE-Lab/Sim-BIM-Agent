@@ -1,9 +1,4 @@
-"""Run limits and saved floor coverage, derived only from files in one run.
-
-Failure: GLM sm25 spent its 3000 seconds on one floor. No in-memory reminder
-latches or assumed room counts: an explicit manifest floor/image scope, source
-provenance and immutable successful saves drive reminders and timeout fallback.
-"""
+"""Run limits and saved floor coverage derived from explicit inputs and immutable saves."""
 from __future__ import annotations
 
 import json
@@ -60,8 +55,6 @@ def saved_floor_status(toolkit, candidate=None):
             if not report.is_file():
                 continue
             report_data = _read(report)
-            # A deadline can interrupt file writes. Never let a torn last save
-            # prevent handing off an earlier complete candidate (sm25 hard stop).
             _read(path.with_name("proposal.json"))
             mapping = candidate_floor_images(toolkit.run, path.parent.name, toolkit=toolkit)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:

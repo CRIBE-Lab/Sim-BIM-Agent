@@ -1,4 +1,4 @@
-"""Read current EventEnvelope logs and the two historical BIM-agent log forms.
+"""Read current EventEnvelope logs and their verified report references.
 
 Behaviour metrics mention BIM tool families, facades, claims and saved source
 BIM files, so this adapter belongs to the building layer.  It only reads the
@@ -8,7 +8,6 @@ domain-neutral runtime event contract; the runtime core never imports it.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
 import base64
 import gzip
 import hashlib
@@ -27,10 +26,6 @@ FIRST_DRAFT_TOOLS = {"build_plan_bim", "build_bim", "build_parametric_bim"}
 from scripts.tool_scripts.bim_agent_saved_result import read_saved_result
 
 
-def _stamp(value: str) -> float:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
-
-
 def _json(value: Any) -> Any:
     if not isinstance(value, str):
         return value
@@ -41,44 +36,16 @@ def _json(value: Any) -> Any:
 
 
 def tool_result_data(value: Any) -> dict[str, Any]:
-    """Read metadata without discarding the original response or its timing tail.
-
-    MCP, provider presentation and CLI text are transport forms of the same
-    result. T1 appends a separate time line, so decoding the entire string loses
-    otherwise valid JSON. The raw text remains in the complete behaviour record.
-    """
+    """Read complete JSON metadata from native MCP response envelopes."""
     if isinstance(value, str):
-        text = value.lstrip()
         try:
-            value, _ = json.JSONDecoder().raw_decode(text)
+            value = json.loads(value)
         except ValueError:
-            # Claude Code truncated T1 sm25 revise_bim at step 114. Retain only
-            # complete leading fields; never treat a partial object as complete.
-            # candidate/source_geometry_ready precede the large evidence arrays.
-            if not text.startswith("{"):
-                return {}
-            decoder, fields, tail = json.JSONDecoder(), {}, text[1:].lstrip()
-            while tail:
-                try:
-                    key, end = decoder.raw_decode(tail)
-                    if not isinstance(key, str) or not tail[end:].lstrip().startswith(":"):
-                        break
-                    tail = tail[end:].lstrip()[1:].lstrip()
-                    item, end = decoder.raw_decode(tail)
-                    fields[key] = item
-                    tail = tail[end:].lstrip()
-                    if not tail.startswith(","):
-                        break
-                    tail = tail[1:].lstrip()
-                except ValueError:
-                    break
-            value = dict(fields, _partial_json=True) if fields else {}
+            return {}
     if not isinstance(value, dict):
         return {}
     if isinstance(value.get("structuredContent"), dict):
         return value["structuredContent"]
-    if "tool_message" in value:
-        return tool_result_data(value["tool_message"].get("content"))
     if isinstance(value.get("content"), list):
         for block in value["content"]:
             if isinstance(block, dict) and block.get("type") == "text":
@@ -210,23 +177,9 @@ def _verify_responses_presentation(execution, presentation, visible, prepared,
                      and event.payload.event_type == "context"]
         original = prepared.get("tool_message")
         if logical != original:
-            from src.agent_runtime.context import _message_content_sha
-            allowed = []
-            for decision in decisions:
-                if decision.action != "compact" or execution.event_id not in decision.replaced_event_ids:
-                    continue
-                summary = _captured({"kind": "blob", "blob": decision.summary.model_dump(mode="json")}, log_root)
-                if not isinstance(summary, dict) or summary.get("kind") != "large_result_references":
-                    continue
-                for replacement in summary.get("replacements", []):
-                    if (replacement.get("event_id") == execution.event_id
-                            and replacement.get("content_sha256") == _message_content_sha(original)):
-                        allowed.append({**original, "content": canonical({"context_reference": {
-                            "content_sha256": replacement["content_sha256"],
-                            "full_result_history_id": replacement["full_result_history_id"],
-                            "reason": "exact repeated large tool result"}})})
-            if logical not in allowed:
-                raise ValueError("changed logical Responses text is not explained by its context decisions")
+            # Current context projection retains exact tool text or removes an
+            # entire interaction. A compaction event never authorizes rewriting it.
+            raise ValueError("changed logical Responses text is not explained by its context decisions")
         original_images = prepared.get("image_blocks", [])
         remaining = list(images)
         removed = []
@@ -422,172 +375,6 @@ def _read_event_log(path: Path) -> dict[str, Any]:
     }
 
 
-def _legacy_streams(run: Path) -> list[Path]:
-    compressed = sorted(p for p in run.glob("*_stream.jsonl.gz") if p.stat().st_size)
-    plain = sorted(p for p in run.glob("*_stream.jsonl")
-                   if p.stat().st_size and p.with_suffix(".jsonl.gz") not in compressed)
-    return sorted(compressed + plain, key=lambda item: item.name)
-
-
-def _read_cli_stream(path: Path, invocation: int) -> dict[str, Any]:
-    opener = gzip.open(path, "rt") if path.suffix == ".gz" else path.open()
-    with opener as stream:
-        events = [json.loads(line) for line in stream if line.strip()]
-    origin = next((_stamp(e["timestamp"]) for e in events if e.get("timestamp")), None)
-    steps: list[dict[str, Any]] = []
-    pending: dict[str, dict[str, Any]] = {}
-    texts: list[str] = []
-    thinking = 0
-    usage: dict[str, dict[str, Any]] = {}
-    quota: list[dict[str, Any]] = []
-    init: dict[str, Any] = {}
-    result: dict[str, Any] = {}
-    last = origin
-    for event in events:
-        if event.get("timestamp"):
-            last = _stamp(event["timestamp"])
-        kind = event.get("type")
-        if kind == "system" and event.get("subtype") == "init":
-            init = {key: event.get(key) for key in
-                    ("model", "claude_code_version", "apiKeySource", "permissionMode")}
-        elif kind == "system" and event.get("subtype") == "thinking_tokens":
-            thinking += int(event.get("estimated_tokens_delta") or 0)
-        elif kind == "rate_limit_event":
-            info = event.get("rate_limit_info") or {}
-            windows = info.get("unifiedWindows") or {}
-            quota.append({"t": None if last is None or origin is None else round(last - origin, 3),
-                          "status": info.get("status"), "raw": info,
-                          "five_hour": (windows.get("five_hour") or {}).get("utilization"),
-                          "seven_day": (windows.get("seven_day") or {}).get("utilization")})
-        elif kind == "assistant":
-            message = event.get("message") or {}
-            if message.get("id") and message.get("usage"):
-                previous = usage.get(message["id"], {})
-                current = message["usage"]
-                if (current.get("output_tokens") or 0) >= (previous.get("output_tokens") or 0):
-                    usage[message["id"]] = dict(current, message_id=message["id"],
-                        t=None if last is None or origin is None else round(last - origin, 3))
-            for block in message.get("content") or []:
-                if block.get("type") == "text" and block.get("text"):
-                    texts.append(block["text"])
-                elif block.get("type") == "tool_use":
-                    step = {
-                        "index": len(steps) + 1,
-                        "_absolute_time": last,
-                        "tool": block["name"].replace("mcp__bim__", ""),
-                        "arguments": block.get("input") or {},
-                        "model_text_before": "\n\n".join(texts),
-                        "thinking_tokens_before": thinking,
-                    }
-                    texts, thinking = [], 0
-                    pending[block["id"]] = step
-                    steps.append(step)
-        elif kind == "user":
-            content = (event.get("message") or {}).get("content")
-            for block in content if isinstance(content, list) else []:
-                if not isinstance(block, dict) or block.get("type") != "tool_result":
-                    continue
-                step = pending.pop(block.get("tool_use_id"), None)
-                if step is None:
-                    continue
-                parts = block.get("content")
-                parts = parts if isinstance(parts, list) else [{"type": "text", "text": str(parts or "")}]
-                text = "\n".join(item.get("text", "") for item in parts if item.get("type") == "text")
-                images = []
-                for item in parts:
-                    if item.get("type") != "image":
-                        continue
-                    source = item.get("source") or {}
-                    raw = base64.b64decode(source.get("data") or "")
-                    images.append({"media_type": source.get("media_type"), "bytes": len(raw),
-                                   "sha256": hashlib.sha256(raw).hexdigest()})
-                step.update(result_text=text, result_images=images,
-                            t_result=None if last is None or origin is None else round(last - origin, 3),
-                            model_visible_result=_json(text),
-                            delivered_to_model=True, delivery_evidence="CLI tool_result message",
-                            is_error=bool(block.get("is_error")), outcome=("failed" if block.get("is_error") else "succeeded"))
-        elif kind == "result":
-            result = {key: event.get(key) for key in
-                      ("subtype", "is_error", "num_turns", "duration_ms", "total_cost_usd",
-                       "stop_reason", "terminal_reason", "result", "usage", "modelUsage")}
-    for step in pending.values():
-        step.update(result_text=None, model_visible_result=None,
-                    delivered_to_model=False, is_error=None, outcome="unknown", unanswered=True)
-    _relative_times(steps, origin)
-    return {"invocation": invocation, "stream": path.name, "steps": steps, "init": init,
-            "message_usage": list(usage.values()), "quota": quota, "result": result,
-            "final_text_after_last_tool": "\n\n".join(texts),
-            "trailing_thinking_tokens": thinking}
-
-
-def _read_cli(run: Path) -> dict[str, Any]:
-    invocations = [_read_cli_stream(path, number)
-                   for number, path in enumerate(_legacy_streams(run), 1)]
-    receipt_path = next(iter(sorted(run.glob("*_receipt.json"))), None)
-    receipt = json.loads(receipt_path.read_text()) if receipt_path else {}
-    return {
-        "source_format": "claude_cli_stream",
-        "run": run.name,
-        "invocations": invocations,
-        "receipt": receipt,
-        "model": receipt.get("actual_model") or ((invocations[0].get("init") or {}).get("model") if invocations else None),
-        "elapsed_seconds": receipt.get("elapsed_seconds"),
-        "usage": [row for inv in invocations for row in inv["message_usage"]],
-        "visible_text": [step["model_text_before"] for inv in invocations for step in inv["steps"]
-                         if step.get("model_text_before")] +
-                        [inv["final_text_after_last_tool"] for inv in invocations if inv["final_text_after_last_tool"]],
-        "gaps": [
-            "CLI launch request is not the final provider request body.",
-            "Tool results are the CLI-visible transformed results, not guaranteed raw MCP bytes.",
-            "Thinking content is unavailable; only CLI-estimated token deltas and signatures may exist.",
-        ],
-        "source_files": [str(path) for path in _legacy_streams(run)] + ([str(receipt_path)] if receipt_path else []),
-    }
-
-
-def _read_bridge(run: Path) -> dict[str, Any]:
-    tool_path = run / "tools.jsonl"
-    rows = [json.loads(line) for line in tool_path.read_text().splitlines() if line.strip()]
-    origin = min((float(row["time"]) for row in rows if row.get("time") is not None), default=None)
-    steps = []
-    for row in rows:
-        data = row.get("data") or {}
-        action = row.get("action", "unknown")
-        # The audit stream records returned data, not original arguments.  Keep a few
-        # unambiguous selectors useful for behaviour metrics and disclose the rest.
-        arguments = {}
-        for key in ("name", "image", "box", "candidate", "topic", "facade", "floor_id"):
-            if key in data:
-                arguments[key] = data[key]
-        steps.append({"index": len(steps) + 1, "_absolute_time": row.get("time"),
-                      "tool": action, "arguments": arguments, "model_visible_result": data,
-                      "delivered_to_model": True,
-                      "delivery_evidence": "legacy result-side audit; exact transport unverified",
-                      "is_error": bool(data.get("error")),
-                      "outcome": "failed" if data.get("error") else "succeeded",
-                      "arguments_capture": "historical_result_only"})
-    _relative_times(steps, origin)
-    controller = run / "controller_receipt.json"
-    receipt = json.loads(controller.read_text()) if controller.is_file() else {}
-    dev_calls = run / "dev_calls.jsonl"
-    sources = [str(tool_path)] + ([str(dev_calls)] if dev_calls.is_file() else []) + ([str(controller)] if controller.is_file() else [])
-    return {
-        "source_format": "legacy_bridge_audit",
-        "run": run.name,
-        "invocations": [{"invocation": 1, "stream": tool_path.name, "steps": steps}],
-        "model": receipt.get("provider_actual_model_receipt") or receipt.get("requested_model"),
-        "elapsed_seconds": receipt.get("elapsed_seconds_to_final_tool"),
-        "usage": [],
-        "visible_text": [],
-        "gaps": [
-            "Bridge tools.jsonl stores result-side audit rows, not complete call arguments or model-visible transport.",
-            "Final provider request/response, visible model text, thinking and per-message usage were not archived.",
-            "Requested model is retained when present; provider actual-model identity is unverified when its receipt is absent.",
-        ],
-        "source_files": sources,
-    }
-
-
 def _behaviour_reference_target(target: Path, record: dict, source_root):
     if record.get("schema_version") != 1:
         raise ValueError("unsupported behaviour reference version")
@@ -602,44 +389,25 @@ def _behaviour_reference_target(target: Path, record: dict, source_root):
 
 
 def load_behaviour(path: str | Path, *, source_root: str | Path | None = None) -> dict[str, Any]:
-    """Load a run directory, current ``events.jsonl``, CLI stream, or bridge audit."""
+    """Load a native event journal or its content-verified report reference."""
     path = Path(path)
     if path.is_dir() and (path / "events.jsonl").is_file():
         record = _read_event_log(path / "events.jsonl")
     elif path.is_file() and path.name == "events.jsonl":
         record = _read_event_log(path)
-    elif path.is_dir() and _legacy_streams(path):
-        record = _read_cli(path)
     elif (path.is_dir() and (path / "record.json.gz").is_file()) or path.name == "record.json.gz":
-        # A historical record is an exact transformed CLI capture, not a new
-        # provider trace. Saved claim/source files can be supplied separately.
         target = path / "record.json.gz" if path.is_dir() else path
         with gzip.open(target, "rt") as stream:
             record = json.load(stream)
-        if record.get("source_format") == "event_envelope_reference":
-            log, evidence_root = _behaviour_reference_target(target, record, source_root)
-            return load_behaviour(log, source_root=evidence_root)
-        record.setdefault("source_format", "claude_cli_record")
-        receipt = record.get("receipt") or {}
-        record.setdefault("model", receipt.get("actual_model"))
-        record.setdefault("elapsed_seconds", receipt.get("elapsed_seconds"))
-        record.setdefault("gaps", ["Provider request is not captured in this historical CLI record."])
-        record.setdefault("source_files", [str(target)])
-        for inv in record["invocations"]:
-            for step in inv["steps"]:
-                step.setdefault("model_visible_result", _json(step.get("result_text")))
-                step.setdefault("delivered_to_model", not step.get("unanswered", False))
-                step.setdefault("outcome", "unknown" if step.get("unanswered") else
-                                "failed" if step.get("is_error") else "succeeded")
-        record.setdefault("visible_text", [s.get("model_text_before", "") for inv in record["invocations"]
-            for s in inv["steps"]] + [inv.get("final_text_after_last_tool", "") for inv in record["invocations"]])
-    elif path.is_dir() and (path / "tools.jsonl").is_file():
-        record = _read_bridge(path)
+        if record.get("source_format") != "event_envelope_reference":
+            raise ValueError("behaviour reports require a verified native event-log reference")
+        log, evidence_root = _behaviour_reference_target(target, record, source_root)
+        return load_behaviour(log, source_root=evidence_root)
     elif path.is_dir() and (path / "inputs.json").is_file():
         record = {"source_format": "missing_capture", "run": path.name,
             "invocations": [], "model": None, "elapsed_seconds": None,
             "usage": [], "visible_text": [], "source_files": [],
-            "gaps": ["No CLI stream or tool audit was captured. Zero captured steps is not evidence of zero executed calls."]}
+            "gaps": ["No native event journal was captured. Zero captured steps is not evidence of zero executed calls."]}
     else:
         raise ValueError(f"no supported behaviour log found at {path}")
     log_root = path if path.is_dir() else path.parent
@@ -797,7 +565,7 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
     transaction_entries = [entry for data in transaction_results.values() for entry in data.get("entries", [])]
     for step in steps:
         data = transaction_results.get(id(step), step.get("result_data") or {})
-        saved_bim = read_saved_result(data, tool=step["tool"], run=run)
+        saved_bim = read_saved_result(data)
         ready = saved_bim.get("source_geometry_ready", data.get("source_geometry_ready"))
         call_error = bool(step.get("is_error"))
         domain_failure = not call_error and (data.get("status") in {"error", "failed"}
@@ -826,7 +594,7 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
               if step["tool"] in {"record_claim", "replace_claim_sources"} and not step.get("is_error")
               and step.get("delivered_to_model", True)]
     # Entries share the actual transaction call/time; they are not extra tool
-    # calls. Read saved claims just as for the compatibility single-step tools.
+    # calls. Read the saved claim evidence for each recorded entry.
     for step in transactions:
         if step.get("is_error") or not step.get("delivered_to_model", True):
             continue
@@ -837,20 +605,7 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
     claims = [claim for claim in claims if claim["objects"]]
     height_sources = Counter(name for claim in claims for name in claim["source_facades"])
     invocations = record["invocations"]
-    quota = [row for inv in invocations for row in inv.get("quota", [])]
-    five = [row["five_hour"] for row in quota if row.get("five_hour") is not None]
-    seven = [row["seven_day"] for row in quota if row.get("seven_day") is not None]
-    cli = next((inv.get("init", {}).get("claude_code_version") for inv in invocations
-                if inv.get("init", {}).get("claude_code_version")), None)
-    cli_results = [inv.get("result") or {} for inv in invocations]
-    turns = (len(record["requests"]) if "requests" in record else
-             sum(row.get("num_turns") or 0 for row in cli_results) or None)
-    model_usage = {}
-    for result in cli_results:
-        for name, value in (result.get("modelUsage") or {}).items():
-            total = model_usage.setdefault(name, Counter())
-            total.update({key: number for key, number in value.items()
-                          if isinstance(number, (int, float))})
+    turns = len(record["requests"]) if "requests" in record else None
     outcome_counts = {key: sum(step[key] for step in steps) for key in
                       ("call_error", "domain_failure", "usable_source_draft")}
     calls_before_attempt = [s for s in steps if attempt is None or
@@ -860,12 +615,12 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": "bim.behaviour.v2",
         "run": record["run"], "source_format": record["source_format"], "model": record.get("model"),
-        "cli": cli, "turns": turns, "invocations": len(invocations),
+        "turns": turns, "invocations": len(invocations),
         "elapsed_seconds": record.get("elapsed_seconds"), "tool_calls": len(steps),
         "tool_capture_missing": record["source_format"] == "missing_capture",
         "call_errors": outcome_counts["call_error"], "domain_failures": outcome_counts["domain_failure"],
         "usable_source_drafts": outcome_counts["usable_source_draft"],
-        "tool_errors": outcome_counts["call_error"], "tools": dict(tools),
+        "tools": dict(tools),
         "claim_transactions": {"calls": len(transactions), "entries": len(transaction_entries),
             "status_counts": dict(Counter(entry["status"] for entry in transaction_entries)),
             "recorded_claims": sum(bool(entry.get("recorded")) for entry in transaction_entries),
@@ -874,9 +629,8 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
             "call_errors": "outer MCP/transport call failed; not added again to domain_failures",
             "domain_failures": "normal return with status error/failed/partial, error, or source_geometry_ready=false",
             "usable_source_drafts": "committed usable sources from the shared save contract, including partial batches; selections excluded; not a fidelity verdict",
-            "tool_errors": "historical alias of call_errors only",
             "first_draft_s": "first usable source, including one produced by correcting a failed draft",
-            "time": "CLI t_call is dispatch time; runtime t_call is execution-event time; no invented precision"},
+            "time": "t_call follows the recorded runtime event; no invented precision"},
         "prepared_tool_results": sum("prepared_result" in step for step in steps),
         "delivered_tool_results": sum(step.get("delivered_to_model") is True for step in steps),
         "undelivered_tool_results": sum(step.get("delivered_to_model") is False for step in steps),
@@ -905,13 +659,7 @@ def summarise(record: dict[str, Any]) -> dict[str, Any]:
         "outcomes": [{key: s.get(key) for key in ("index", "tool", "t_call", "call_error", "domain_failure",
                      "usable_source_draft", "saved_candidate")} for s in steps if s["call_error"] or s["domain_failure"] or s["usable_source_draft"]],
         "usage": record.get("usage", [row for inv in invocations for row in inv.get("message_usage", [])]),
-        "model_usage": {key: dict(value) for key, value in model_usage.items()},
-        "cost_usd_cli": sum(row.get("total_cost_usd") or 0 for row in cli_results) if cli else None,
-        "thinking_tokens_estimated": (sum(s.get("thinking_tokens_before", 0) for s in steps)
-            + sum(inv.get("trailing_thinking_tokens", 0) for inv in invocations)) if cli else None,
         "visible_text_chars": sum(len(t) for t in record.get("visible_text", [])),
-        "five_hour_window": [five[0], five[-1]] if five else None,
-        "seven_day_window": [seven[0], seven[-1]] if seven else None,
     }
 
 
@@ -959,11 +707,9 @@ def write_behaviour_report(path: str | Path, out: str | Path, *, source_root: st
             target = source / "record.json.gz" if source.is_dir() else source
             with gzip.open(target, "rt") as stream:
                 previous = json.load(stream)
-            if previous.get("source_format") == "event_envelope_reference":
-                log, source_root = _behaviour_reference_target(target, previous, source_root)
-            else:
-                # Old expanded records can be exported without their journal.
-                log = None
+            if previous.get("source_format") != "event_envelope_reference":
+                raise ValueError("behaviour reports require a native event-log reference")
+            log, source_root = _behaviour_reference_target(target, previous, source_root)
         # The immutable event journal and its verified attachments already hold
         # the complete behaviour. Avoid serializing an expanded second copy.
         if log is not None:
@@ -980,12 +726,12 @@ def write_behaviour_report(path: str | Path, out: str | Path, *, source_root: st
 
 
 def main():
-    """One offline command for CLI streams, runtime events and archived records."""
+    """Export a native runtime journal or its verified report reference."""
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", type=Path)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--source-root", type=Path, help="Saved BIM/claim files for an archived CLI record")
+    parser.add_argument("--source-root", type=Path, help="Saved BIM/claim files associated with the event journal")
     args = parser.parse_args()
     summary = write_behaviour_report(args.run, args.out, source_root=args.source_root)
     print(json.dumps({key: summary[key] for key in (

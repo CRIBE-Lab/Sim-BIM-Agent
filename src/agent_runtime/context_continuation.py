@@ -21,7 +21,7 @@ from src.agent_runtime.continuation import ReadOnlyRun
 from src.agent_runtime.store import EventStore, json_bytes
 from src.harness_contracts import (
     ContextEventPayload,
-    ExternalCoordinatorMcpPayload,
+    ContextImportPayload,
     HashedBlobRef,
     SourceRef,
 )
@@ -279,9 +279,7 @@ class ImportedContext:
         evidence = SourceRef(source_id="continuation-source-checkpoint", source_kind="history",
                              locator=source_locator, blob=manifest_blob)
         anchor = store.append(
-            ExternalCoordinatorMcpPayload(
-                phase="operation", coordinator_task_id="operator-continuation-import",
-                method="continuation.import_context",
+            ContextImportPayload(
                 request_content=store.capture({"source_run_id": self.source.run_id,
                                                "checkpoint_sha256": checkpoint.sha256}),
                 result_content=store.capture(import_record),

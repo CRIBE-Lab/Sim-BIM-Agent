@@ -220,68 +220,6 @@ def verified_reader_height_reference(run, reference, *, target, value, source):
     }
 
 
-def delivered_reader_height_index(run, source, candidate):
-    """Reconstruct legacy exact bindings from real adjacent reader deliveries.
-
-    This is deliberately strict: the original image, artifact bytes, exact row
-    bbox/value and a fresh one-to-one match to the current source must agree.
-    Duplicate exact rows are omitted instead of guessed.
-    """
-    run = Path(run).resolve()
-    root = run.parent
-    tasks = root / "tasks"
-    if not tasks.is_dir():
-        return {}
-    from .elevation import match_elevation, validate_elevation_artifact
-
-    found = {}
-    for record_path in sorted(tasks.glob("*/reader_record.json")):
-        try:
-            record = json.loads(record_path.read_bytes())
-            ref = record["artifact"]
-            if (record.get("role_id") != "elevation_reader"
-                    or record.get("status") != "completed" or not isinstance(ref, dict)):
-                continue
-            artifact_path = (root / ref["path"]).resolve()
-            if (not artifact_path.is_relative_to(tasks.resolve())
-                    or artifact_path.parent != record_path.parent.resolve()):
-                continue
-            raw = artifact_path.read_bytes()
-            if hashlib.sha256(raw).hexdigest() != ref["sha256"]:
-                continue
-            artifact = validate_elevation_artifact(json.loads(raw))
-            image_path = run / "images" / artifact["image"]
-            if (not image_path.is_file()
-                    or hashlib.sha256(image_path.read_bytes()).hexdigest() != record["input_sha256"]):
-                continue
-            report = match_elevation(source, artifact, candidate=candidate)
-            by_id = {row["id"]: row for row in artifact["openings"]}
-            identity_pairs = [*report["matches"], *[
-                row for row in report["conflicts"]
-                if row.get("type") == "position_or_width_conflict" and not row.get("ambiguous")
-            ]]
-            for matched in identity_pairs:
-                row = by_id[matched["artifact_opening_id"]]
-                if row["evidence_type"] not in IMAGE_EVIDENCE:
-                    continue
-                kind = "window" if row["kind"] == "window" else "opening"
-                key = (
-                    kind, matched["source_opening_id"],
-                    tuple([row["sill_m"], row["head_m"]]),
-                    artifact["image"], tuple(row["bbox"]),
-                )
-                found.setdefault(key, []).append({
-                    "task_id": record["task_id"],
-                    "artifact_sha256": ref["sha256"],
-                    "artifact_opening_id": row["id"],
-                    "image": artifact["image"],
-                    "box": row["bbox"],
-                    "height_m": [row["sill_m"], row["head_m"]],
-                    "verification": "adjacent_delivered_artifact_exact_match",
-                })
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-            continue
-    return {key: rows[0] for key, rows in found.items() if len(rows) == 1}
 
 
 def derive_z_calibration(
@@ -424,8 +362,7 @@ def height_locations(artifact, match, size):
         candidate = row.get("opening_bbox")
         if isinstance(candidate, list) and len(candidate) == 4:
             return candidate
-        # Read compatibility for immutable pre-Q2 submissions.
-        return row["bbox"]
+        return None
 
     if explicit is not None:
         anchors = []
@@ -464,6 +401,8 @@ def height_locations(artifact, match, size):
 
     def vertical_fits(row):
         region = opening_box(row)
+        if region is None:
+            return False
         pad = max(uncertainty(row["sill_m"]), uncertainty(row["head_m"]))
         return (region[1] - pad - 2 <= (row["head_m"] - zo) / zs
                 and (row["sill_m"] - zo) / zs <= region[3] + pad + 2)
@@ -494,14 +433,14 @@ def height_locations(artifact, match, size):
         if row["evidence_type"] not in IMAGE_EVIDENCE:
             item["status"] = "non_image_evidence"
             continue
-        if not inside(located) or not vertical_fits(row):
+        if located is None or not inside(located) or not vertical_fits(row):
             continue
         # These are context crops in the unchanged original, not new observations.
         hp = (tolerance["position"] + tolerance["width"] / 2) / abs(hs)
         vp = max(uncertainty(row["sill_m"]), uncertainty(row["head_m"]))
         box = [max(0, math.floor(located[0] - hp)), max(0, math.floor(located[1] - vp)),
                min(size[0], math.ceil(located[2] + hp)), min(size[1], math.ceil(located[3] + vp))]
-        if box == [0, 0, *size] or any(other["id"] != row["id"]
+        if box == [0, 0, *size] or any(other["id"] != row["id"] and opening_box(other) is not None
                 and box[0] <= opening_box(other)[0] and box[1] <= opening_box(other)[1]
                 and box[2] >= opening_box(other)[2] and box[3] >= opening_box(other)[3]
                 for other in artifact["openings"]):
@@ -518,7 +457,7 @@ def carry_height_evidence(session, saved_match, artifact, entries):
 
     A usable original opening bbox does not depend on a separate view or a full
     image-to-Z calibration.  Calibration is still retained when available for
-    compatibility and visual projection, but the delivered reader row and the
+    visual projection, but the delivered reader row and the
     one-to-one match are the authoritative location binding.
     """
     from .elevation import validate_elevation_artifact

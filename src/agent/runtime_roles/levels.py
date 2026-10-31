@@ -118,19 +118,15 @@ def resolve_levels(registry, plans, elevations, overrides=()):
 
 
 def apply_resolved_levels(plan, resolution):
+    if plan.get("reading_type") != "plan":
+        raise ValueError("level resolution requires a 2D plan reading")
     updated, _ = resolve_plan_lengths(plan)
     if any(resolution[field]["value_m"] is None for field in ("z_floor", "ceiling_height")):
         raise ValueError("assembly requires resolved floor base and top; 2D readings contain no fallback heights")
-    delta = resolution["z_floor"]["value_m"] - updated.get("z_floor", resolution["z_floor"]["value_m"])
     for field in ("z_floor", "ceiling_height"):
         updated[field] = resolution[field]["value_m"]
-    # Legacy BIM drafts use provisional relative heights. Explicit Z in a 2D
-    # reading is an absolute observation and must survive floor resolution.
-    # Never clip an opening to fit a shorter storey.
-    if delta and updated.get("reading_type") != "plan":
-        for row in updated.get("openings", []):
-            if "z" in row:
-                row["z"] = [z + delta for z in row["z"]]
+    # Explicit opening Z is an absolute observation; resolving a floor must
+    # neither shift it nor clip it to fit a shorter storey.
     text = "Role level resolution (absolute metres): " + json.dumps(
         resolution, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     updated["basis"] = updated.get("basis", "") + "\n" + text

@@ -29,7 +29,7 @@ from src.harness_contracts import (
 from src.harness_contracts.base import ContractModel
 from .adapter import (convert_tool_result, parse_response, prepare_request,
                       reasoning_history_messages, reported_tokens)
-from .accounting import (account_request_usage, bills_images_separately,
+from .accounting import (bills_images_separately,
     get_cny_price_schedule, require_cny_price_schedule, request_accounting_from_store, summarize_request_accounting)
 from .budget import PriceSchedule, RequestEstimate, RuntimeBudget
 from .budget_projection import load_budget_projection
@@ -114,10 +114,7 @@ class RunLimits(ContractModel):
     model_calls: int = Field(ge=1)
     tool_calls: int = Field(ge=0)
     seconds: float | None = Field(gt=0)
-    # Omit the legacy default from frozen JSON so old checkpoints and worker
-    # configurations without this field remain byte-shape compatible.
-    time_budget_mode: Literal["wall_and_requests", "wall"] = Field(
-        default="wall_and_requests", exclude_if=lambda mode: mode == "wall_and_requests")
+    time_budget_mode: Literal["wall_and_requests", "wall"] = "wall_and_requests"
     tokens: int | None = Field(ge=1)
     money_usd: Decimal | None = Field(default=None, ge=0)
     money_cny: Decimal | None = Field(default=None, ge=0)
@@ -185,7 +182,8 @@ class Runtime:
 
     async def run(self, messages: list[dict], *, message_sources=None,
                   image_originals=None, resume=False) -> dict:
-        if self.versions.remote_model.route_id == "deepseek" and self.reasoning_history != "all":
+        from .providers import is_deepseek_route
+        if is_deepseek_route(self.versions.remote_model.route_id, self.model) and self.reasoning_history != "all":
             raise ValueError("DeepSeek tool calls require reasoning_history=all")
         if self.versions.remote_model.route_id == "opencode-go":
             from .opencode_go import model_contract
@@ -552,7 +550,7 @@ class Runtime:
         dimensions["tool_calls"] = {"remaining": str(min(max(0, limit - used) for limit, used in tool_caps)),
             "remaining_fraction": min(max(0, limit - used) / limit if limit else 0 for limit, used in tool_caps)}
         return {"schema_version": 1, "scope": "runtime_managed_requests_only",
-                "external_coordinator_usage": "unavailable", "dimensions": dimensions}
+                "dimensions": dimensions}
 
     def _project(self, *, force_compact=False, target_tokens=None):
         with self._measure("context_projection"):
@@ -1246,8 +1244,7 @@ class Runtime:
         request = next((e for e in self.store.events if e.payload.event_type == "adapter_request"
             and e.payload.reservation_id == reservation_id), None)
         if request is None:
-            # Legacy offline settlement fixtures can predate request captures.
-            return account_request_usage(usage, image_tokens_estimate=0, pricing=None)
+            raise ValueError("request accounting requires its recorded adapter request")
         return request_accounting_from_store(self.store, request.event_id, usage=usage).accounting
 
     def _effective_budget_usage(self, reservation_id, fallback):
@@ -1746,7 +1743,7 @@ class Runtime:
         self.elapsed_before = max(saved["elapsed_seconds"], time.time() - self.started_epoch)
         self.started = time.monotonic()
         # Resume may not change prompts, tools, policy, budgets, route, or code.
-        if saved.get("config", self._config()) != self._config():
+        if saved.get("config") != self._config():
             return "resume_configuration_changed"
         if saved["versions"] != self.versions.model_dump(mode="json"):
             return "resume_state_changed"
@@ -1771,6 +1768,8 @@ class Runtime:
                     return "resume_state_changed"
                 self._completed_receipt = recorded
                 return "already_completed"
+            if self.domain_completion:
+                return "resume_state_changed"
         if saved.get("context"):
             from .context import ContextManager
             self.context = ContextManager.load(self.store, saved["context"], policy=self.context_policy)
@@ -1785,9 +1784,7 @@ class Runtime:
         self.incomplete_response_count = saved.get("incomplete_response_count", 0)
         self.pending_response_id = saved.get("pending_response_id")
         pictures = saved.get("pending_pictures")
-        if pictures and pictures.get("kind") == "sha256":  # historical checkpoint
-            self.pending_pictures = json.loads(self.store.get_bytes(HashedBlobRef.model_validate(pictures)))
-        elif pictures:
+        if pictures:
             from pydantic import TypeAdapter
             from src.harness_contracts.events import CapturedValue
             self.pending_pictures = self.store.resolve(TypeAdapter(CapturedValue).validate_json(json.dumps(pictures)))

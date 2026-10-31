@@ -12,12 +12,21 @@ CHATGPT_SUBSCRIPTION = "chatgpt-subscription"
 CHATGPT_BASE_URL = "https://api.openai.com/v1"
 OPENCODE_GO = "opencode-go"
 DEEPSEEK = "deepseek"
+DEEPSEEK_MODELS = {
+    DEEPSEEK: "deepseek-flash",
+    OPENCODE_GO: "deepseek-v4.1-flash",
+    "paratera": "DeepSeek-V4.1-Flash",
+}
+
+
+def is_deepseek_route(provider: str, model: str) -> bool:
+    """Only these endpoint-specific Flash IDs share the reviewed contract."""
+    return provider in DEEPSEEK_MODELS and DEEPSEEK_MODELS[provider] == model
+
 GLM_SUBSCRIPTION_PROVIDERS = (GLM_SUBSCRIPTION, GLM_SUBSCRIPTION_ANTHROPIC)
 SUBSCRIPTION_PROVIDERS = (*GLM_SUBSCRIPTION_PROVIDERS, CHATGPT_SUBSCRIPTION, OPENCODE_GO)
 LIVE_PROVIDERS = ("paratera", DEEPSEEK, *SUBSCRIPTION_PROVIDERS)
-# Verified 10-03 on the Coding Plan endpoint: omitted behaves like the top level, low/medium cut
-# thinking 2-4x (migration_comparison/subscription_effort_calibration.json). Claude Code sends
-# output_config.effort=medium with adaptive thinking (evidence/claude_code_request_capture/).
+# Explicitly admitted reasoning levels for the GLM Coding Plan adapters.
 SUBSCRIPTION_REASONING_EFFORTS = ("low", "medium", "high", "max")
 
 
@@ -27,8 +36,8 @@ def validate_provider_model(provider: str, model: str) -> None:
         model_contract(model)
     if provider == DEEPSEEK and model != "deepseek-flash":
         raise ValueError("reviewed DeepSeek vision route requires model deepseek-flash")
-    if isinstance(model, str) and "deepseek" in model.casefold() and provider != DEEPSEEK:
-        raise ValueError("DeepSeek requires its explicit reviewed deepseek provider")
+    if isinstance(model, str) and "deepseek" in model.casefold() and not is_deepseek_route(provider, model):
+        raise ValueError("DeepSeek model does not match an explicitly reviewed provider route")
     if provider in GLM_SUBSCRIPTION_PROVIDERS and model != GLM_SUBSCRIPTION_MODEL:
         raise ValueError(f"{provider} requires model glm-5.3-flash")
     if provider == CHATGPT_SUBSCRIPTION and (not isinstance(model, str) or not model.strip()):
@@ -56,29 +65,41 @@ def subscription_credentials(path: Path | None = None, *, provider=GLM_SUBSCRIPT
     return base_url, key
 
 
+def deepseek_parameters(*, output_tokens, temperature=None, thinking=True, reasoning_effort=None):
+    """DeepSeek V4.1 Flash Chat contract, including reasoning in max_tokens.
+
+    https://api-docs.deepseek.com/api/create-chat-completion
+    https://api-docs.deepseek.com/guides/thinking_mode
+    """
+    if type(output_tokens) is not int or not 0 < output_tokens <= 393216:
+        raise ValueError("DeepSeek output_tokens must be within 1..393216")
+    parameters = {"max_tokens": output_tokens,
+                  "thinking": {"type": "enabled" if thinking else "disabled"}}
+    if thinking:
+        if temperature is not None:
+            raise ValueError("DeepSeek thinking ignores temperature; omit it")
+        effort = reasoning_effort or "high"
+        if effort not in {"low", "high", "max"}:
+            raise ValueError("DeepSeek reasoning_effort must be low/high/max")
+        parameters["reasoning_effort"] = effort
+    else:
+        if reasoning_effort is not None:
+            raise ValueError("DeepSeek reasoning_effort requires thinking")
+        if temperature is not None:
+            parameters["temperature"] = temperature
+    return parameters
+
+
 def provider_parameters(provider: str, *, output_tokens: int,
                         temperature: float | None = None,
                         thinking: bool = True, reasoning_effort: str | None = None,
                         model: str | None = None) -> dict:
-    if provider == DEEPSEEK:
+    if provider == DEEPSEEK or (isinstance(model, str) and "deepseek" in model.casefold()):
         validate_provider_model(provider, model)
-        if type(output_tokens) is not int or not 0 < output_tokens <= 393216:
-            raise ValueError("DeepSeek output_tokens must be within 1..393216")
-        parameters = {"max_tokens": output_tokens,
-                      "thinking": {"type": "enabled" if thinking else "disabled"}}
-        if thinking:
-            if temperature is not None:
-                raise ValueError("DeepSeek thinking ignores temperature; omit it")
-            effort = reasoning_effort or "high"
-            if effort not in {"low", "high", "max"}:
-                raise ValueError("DeepSeek reasoning_effort must be low/high/max")
-            parameters["reasoning_effort"] = effort
-        else:
-            if reasoning_effort is not None:
-                raise ValueError("DeepSeek reasoning_effort requires thinking")
-            if temperature is not None:
-                parameters["temperature"] = temperature
-        return parameters
+    if is_deepseek_route(provider, model):
+        validate_provider_model(provider, model)
+        return deepseek_parameters(output_tokens=output_tokens, temperature=temperature,
+            thinking=thinking, reasoning_effort=reasoning_effort)
     if provider == OPENCODE_GO:
         from .opencode_go import parameters
         return parameters(model, output_tokens=output_tokens, temperature=temperature,

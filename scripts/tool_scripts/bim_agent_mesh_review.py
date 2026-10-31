@@ -92,8 +92,7 @@ def _evidence(run, candidate, source, manifest, declaration):
             raise ValueError("admitted auxiliary image changed")
         _png(image_path, tuple(entry["size"]))
         paths.append(relative)
-    for key, filename in (("building_input", "building_input.json"),
-                          ("plan_recovery", "resume_plan.json")):
+    for key, filename in (("building_input", "building_input.json"),):
         entry = manifest.get(key)
         if entry is None:
             continue
@@ -207,7 +206,7 @@ def mesh_review_status(toolkit, candidate) -> dict:
 
 
 def carry_mesh_review(toolkit, candidate, reviews_json) -> dict | None:
-    """Consume the new mesh object; empty/legacy list input stays with its caller."""
+    """Consume a mesh observation packet; list-based image reviews stay with their caller."""
     if not reviews_json:
         return None
     payload = json.loads(reviews_json)

@@ -14,13 +14,6 @@ Examples are independent of case inputs. Reference reads never inspect run files
 """
 from __future__ import annotations
 
-# 09-30 fix of the 09-29 v1. Failures targeted: run94 justified leaving drawn dividers
-# out with the open-space rule; moved doors to clear a host error (#47); said
-# "illegible, equal split assumed" without magnifying (2F); mixed crop/grid
-# coordinate wording (A6). Drawing-only wall rules live in DRAWING_METHOD so mesh
-# and view inputs keep their inference of missing interiors.
-# C2: the first full review found CORE's unconditional look-again instruction
-# contradicted T1's final 15% rule. Use that bounded finishing rule throughout.
 _DRAWING_PRIORITIES = """What matters, in order: the actual physical spaces and the partitions between
 them; each floor's shape and level; every door and window with its position,
 width and height on its real wall; and door connectivity. Room-use precision has
@@ -44,7 +37,7 @@ does not define north."""
 _CORE_TEMPLATE = """Build a viewable lightweight BIM of the target building from the supplied
 inputs. You choose observations, tools and revisions; no tool sequence is fixed.
 
-{priorities} No EnergyPlus objects or materials.
+{priorities}
 - Preserve evidence of physical partitions; furniture or use alone does not
   establish a wall. Missing interiors may be explicitly inferred at the requested
   simplification. Keep each real space whole: never split it into boxes or add false walls
@@ -75,14 +68,6 @@ original_pixels_per_returned_pixel. Keep object IDs stable.
 CORE = _CORE_TEMPLATE.format(priorities=_DRAWING_PRIORITIES, frame=_DRAWING_FRAME)
 MESH_CORE = _CORE_TEMPLATE.format(priorities=_MESH_PRIORITIES, frame=_MESH_FRAME)
 
-# 09-30 replacement of v1. Failures targeted: v1 required row-by-row magnified reading
-# before any build, so first drafts still came after 41-77 calls (run69-94) and later
-# floors were rushed (run93/94 2F); its "a full view is too small" contradicted run57
-# (no crops, 29/29 positions); its whole-row crops could not magnify under the 1600 px
-# limit (run94 1.08x); drawn dividers read as absent (run94 1F south); heights taken
-# from a chain measuring another opening (run94 claims 0001/0003).
-# T1 replaces the height-feedback sentence after GLM sm24 cited a whole facade
-# and applied the ordinary-window chain to both 4800 mm windows.
 DRAWING_METHOD = """Drawing method, for measured plans and elevations. The drawings give the
 structure; every floor's saved draft is then checked against them.
 
@@ -171,9 +156,8 @@ true interior was recovered. Full original inputs remain the visual evidence;
 no prior generated model is an observation.
 """
 
-# A5-T replaces the 15,808-character legacy mesh guide. Shared rules now come
-# from the core template/TOOLS/DELIVERY; native-frame and inference contracts stay in
-# partial_inference. This removes drift in claims, budgets and finishing rules.
+# Mesh views share the core rules, tool contracts and delivery requirements.
+# Native coordinates and inferred interiors are explained in partial_inference.
 MESH_METHOD = MESH_VIEWS + """You are the orchestrator and can do the work directly: decide which inputs and
 tools resolve the current question, the precision needed, and what to inspect or
 revise. Configured mesh workers are optional tools; when no worker tool is exposed,
@@ -305,10 +289,6 @@ IMAGE_KINDS = """The images may be measured drawings, photographs or rendered vi
 method below only to the kind of image it names.
 """
 
-# 09-30. Failures targeted: v1 filed pixel tools under "specific doubts" although
-# run58 used whole-plan profiles well; set_space_role was pointed at room_types while
-# its format is in edits (run94 3 errors); invented image names and an object instead
-# of a list for assembly (run94 #16, #26, #51); relation checks lost their purpose.
 TOOLS = """Tools by purpose. Each tool's description gives its contract; read the named
 get_bim_reference topic when preparing a call whose format this prompt does not
 already give. Image names are the exact names listed by inputs.
@@ -366,7 +346,6 @@ the whole building and handoff. Without a time limit, elapsed time alone is neit
 a stop condition nor a reason to add checks. A partial or unresolved handoff must
 not be described as complete, verified reconstruction."""
 
-# 09-30. Failure targeted: set_space_role format errors (run94 #67-69).
 DRAWING_PROCESS = """Drawing delivery policy local_drawing_reviews_v2 (single model).
 First view the whole supplied drawing set. Establish one origin/direction, major
 dimensions and supported storey levels/heights before detailed floor work. Use
@@ -488,34 +467,7 @@ Do not ask the user for routine geometry choices.
 """
 
 
-def tool_capabilities(manifest):
-    """Only explicit run configuration enables delegated review or follow-ups."""
-    return {"review_detail": manifest.get("review_detail_enabled") is True,
-            "continuation": bool(manifest.get("continuation_rounds", 0))}
-
-
-# Registered handlers remain for immutable catalog checks and explicit replay.
-# A5-T corpus/entry-point decisions are recorded in the batch's tool_usage.json.
-REPLAY_ONLY_TOOLS = frozenset({
-    "record_claim", "decide_claim", "confirm_claims", "pixel_profile",
-    "preview_space_trace", "view_space_trace", "select_space_trace",
-    "view_candidate", "view_claim_evidence",
-})
-
-
-def filter_tool_catalog(tools, *, review_detail=False, continuation=False):
-    """Project the complete registered catalog; input modality never removes tools."""
-    # A2-T: single-step writes stay callable for historical replay, while models
-    # receive the audited transaction instead of the T1 sm25 61-call paperwork.
-    disabled = set(REPLAY_ONLY_TOOLS)
-    if not review_detail:
-        disabled.add("review_detail")
-    if not continuation:
-        disabled.add("record_work_review")
-    return [tool for tool in tools if tool["name"] not in disabled]
-
-
-def build_guide(*, images=None, mesh=False, review_detail=False, continuation=False):
+def build_guide(*, images=None, mesh=False):
     """System prompt for one run. images is drawings, mesh_views, photos, unknown or None."""
     mesh_mode = mesh or images == "mesh_views"
     parts = [MESH_CORE if mesh_mode else CORE]
@@ -530,17 +482,8 @@ def build_guide(*, images=None, mesh=False, review_detail=False, continuation=Fa
     if not mesh_mode and images in ("photos", "unknown"):
         parts.append(PHOTOS)
     tools = TOOLS
-    # C2: the review found disabled tools described in every request. Their
-    # catalog entries and these sentences now use the same capability flags.
-    if review_detail:
-        tools = tools.replace("- inputs lists", "- review_detail asks a local image model one small located visual question.\n- inputs lists")
-    if continuation:
-        tools = tools.replace("assembly and revisions)", "assembly and revisions; a continuation does not reset it)")
     return "\n".join(parts + [tools, DELIVERY])
 
-
-# Compatibility for code importing the fully enabled assembled mesh guide.
-MESH_GUIDE = build_guide(mesh=True, review_detail=True, continuation=True)
 
 REFERENCES = {
     'drawing_process': DRAWING_PROCESS_REFERENCE,
@@ -570,7 +513,7 @@ reinspect the original and choose another crop/color/threshold or record uncerta
 Candidate peaks are ink, not openings: check the full aperture and surrounding wall
 before grouping endpoints. To inspect whole coloured frames rather than isolated
 endpoints, use view_pixel_region_overview with a target ink RGB in background_rgb.
-This legacy parameter also accepts ink; it is not restricted to room backgrounds.
+The background_rgb parameter accepts the target ink colour as well as room backgrounds.
 Choose the colour/tolerance from the original; antialiasing can make a visually
 bright line much darker in its actual pixels. Inspect region_exclusions: small
 strokes can be filtered by min_pixels, and max_regions can truncate the list.
@@ -667,8 +610,8 @@ adopted values. The manifest owns this policy: model-provided audit fields canno
 disable it or select a different step. Hosted openings follow their wall; rooms,
 opening hosts and connectivity must survive. Narrow rooms and openings are never
 deleted or merged to make the grid pass. Remaining near faces or any room portion
-narrower than 0.60 m reject the save. Old manifests without that field retain the
-earlier opt-in/Q1 behaviour for historical replay.
+narrower than 0.60 m reject the save. The frozen manifest declares whether the
+shared grid applies; mesh inputs retain their separately declared geometry policy.
 The compiler itself never snaps. The saved plan.regularization records version
 plan_regularization_v1 and the full trace; submitted_plan.json retains the input.
 The reply contains counts, largest move, rejections and a full-report file/hash.
@@ -676,7 +619,7 @@ regularization_inputs.coordinate_references contains axis, value_m, basis
 ('dimension'), chain_id, tick_index and source_refs; line_references contains
 partition_id, basis ('dimension' or 'ink') and source_refs. Plan-reader trial
 alone supplies these from checked dimensions/ink; this build entry does not
-read new dimensions or align to image ink. Historical replay policy belongs
+read new dimensions or align to image ink. The regularization policy belongs
 to the run manifest, never to a model-declared plan field.
 Every enclosed face becomes one space. No room count is supplied or enforced.
 An open passage still leaves two faces and two spaces, even at full ceiling height.
@@ -1537,9 +1480,6 @@ explicit straight-edged rings. Arbitrary splines and continuously sloped spaces
 are unsupported. These limits are independent of observed mesh completeness.
 """
 
-# A2-T replaces the T1 sm25 register/adopt/confirm sequence (61/147 calls,
-# step 115 whole-proposal rejection) with one audited transaction. Arithmetic,
-# source location and drawing interpretation remain separate conclusions.
 REFERENCES['claims'] = """Evidence transactions for drawing counts and existing-candidate parameters.
 
 Use claim_transaction(candidate, entries_json). entries_json is a list; each
@@ -1695,9 +1635,8 @@ must equal the complete XY projection; sections must cover its floor's full heig
 in order without gaps or overlap, with positive shared area between adjacent
 sections. Each section explicitly preserves its core holes. Internal interfaces
 are removed and coplanar walls united before opening binding. Do not represent the
-same office as separate rooms joined by artificial doors/passages. Sloping walls,
-parametric section repetition and section-aware legacy partition scoring/EP are
-unsupported; those consumers reject or report not_evaluated instead of flattening.
+same office as separate rooms joined by artificial doors/passages. Sloping walls and parametric section repetition are unsupported.
+Unsupported shapes must be reported explicitly rather than flattened.
 Reshape/reflect/repartition of sectioned cells needs a complete explicit revised
 build_bim proposal including all sections, openings and any bound declarations.
 Space relation observations may specify z_m (absolute height); without a height,

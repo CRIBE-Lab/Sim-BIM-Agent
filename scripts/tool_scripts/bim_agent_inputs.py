@@ -1,8 +1,8 @@
-"""Freeze user building declarations for the standalone BIM-agent experiment.
+"""Freeze user building declarations for the Sim-BIM Agent.
 
 This module deliberately does not interpret the declaration as a BIM schema.
 It preserves the supplied JSON and only links declared image paths to images
-that the caller has already admitted to the experiment's image inventory.
+that the caller has already admitted to the run's image inventory.
 """
 from __future__ import annotations
 
@@ -99,10 +99,6 @@ def freeze_building_input(source: Path, run: Path, images: dict) -> dict:
             "with the already authorized PNG inventory and are never opened as file paths."
         ),
         "field_semantics": {
-            "thermal_zones": (
-                "User declaration for downstream simulation zoning; it is not a measured or "
-                "authoritative count of physical source spaces."
-            ),
             "other_fields": (
                 "User-supplied building declarations retain their stated meaning and are not "
                 "ground truth or independently verified observations."
@@ -112,29 +108,4 @@ def freeze_building_input(source: Path, run: Path, images: dict) -> dict:
             "The agent must compare declarations with supplied mesh, image and other evidence, preserve the "
             "conflict or uncertainty, and decide its modelling effect explicitly."
         ),
-    }
-
-
-def freeze_plan_input(source: Path, run: Path, images: dict, image_name: str) -> dict:
-    """Freeze one unverified pixel-plan JSON, bound to an admitted original image."""
-    if image_name not in images:
-        raise ValueError(f"--plan-image {image_name!r} is not in this run's PNG image inventory")
-    source = source.resolve()
-    raw = source.read_bytes()
-    try:
-        declaration = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"--resume-plan must be valid UTF-8 JSON: {error}") from error
-    if not isinstance(declaration, dict):
-        raise ValueError("--resume-plan must contain a JSON object")
-    (run / FROZEN_PLAN_INPUT).write_bytes(raw)
-    return {
-        "source_path": str(source),
-        "frozen_path": FROZEN_PLAN_INPUT,
-        "raw_sha256": hashlib.sha256(raw).hexdigest(),
-        "raw_size_bytes": len(raw),
-        "declaration": declaration,
-        "image": image_name,
-        "image_sha256": images[image_name]["sha256"],
-        "status": "unverified_pixel_plan_declaration_not_compiled",
     }

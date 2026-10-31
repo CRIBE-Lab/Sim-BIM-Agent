@@ -146,7 +146,7 @@ def _parent_inputs(parent_run, candidate, observations):
         if (_sha(path) != entry.get("sha256") or validate_png(path) != entry.get("size")):
             raise ValueError("admitted auxiliary image changed")
         paths.append(relative)
-    for key, filename in (("building_input", "building_input.json"), ("plan_recovery", "resume_plan.json")):
+    for key, filename in (("building_input", "building_input.json"),):
         entry = manifest.get(key)
         if entry is None:
             continue
@@ -243,7 +243,7 @@ def prepare_mesh_worker_packet(parent_run, child_run, *, task_id, question, note
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(png)
     child_manifest = {key: copy.deepcopy(manifest[key]) for key in
-        ("images", "image_kind", "mesh_input", "building_input", "plan_recovery",
+        ("images", "image_kind", "mesh_input", "building_input",
          "architectural_modelling_policy", "vertical_continuity_policy") if key in manifest}
     child_manifest.update(input_mode="runtime_mesh_worker_observation", scope=question,
         floor_plan_images=[], floor_scope_source="not_declared", **request["timing"])

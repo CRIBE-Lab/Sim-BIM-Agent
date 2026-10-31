@@ -171,7 +171,7 @@ def _source_index(source: dict, *, logical=True) -> tuple[str, dict, dict, dict]
             "vertices": copy.deepcopy(vertices),
             # These are intentionally retained from the immutable source
             # record.  They are needed only when a reviewer explicitly limits
-            # a review to one exterior facade; the legacy plan-review path
+            # a review to one exterior facade; the plan-review path
             # never depends on them.
             "host_boundary_id": row.get("host_boundary_id"),
             "exterior": row.get("exterior"),

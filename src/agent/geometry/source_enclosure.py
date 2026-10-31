@@ -16,7 +16,7 @@ from collections import defaultdict
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
-from src.agent.geometry.openings import _frame, _lift, _project
+from src.agent.geometry.surfaces import wall_frame, lift_from_wall, project_to_wall
 from src.agent.geometry.source_bim import EPS, _on_wall, _parts
 from src.agent.geometry.source_model import _digest
 
@@ -92,9 +92,9 @@ def _boundary_frame(boundary: dict, *, allow_nonorthogonal=False):
         if len(vertices) < 4:
             _fail(f"boundary {boundary.get('id')}: wall must have a complete vertical parent polygon")
         origin = vertices[0][:2]
-        direction, _ = _frame(origin, vertices[1][:2])
+        direction, _ = wall_frame(origin, vertices[1][:2])
         project = lambda ring: _on_wall(ring, _DictBoundary(boundary))
-        lift = lambda ring: _lift(list(ring), origin, direction)
+        lift = lambda ring: lift_from_wall(list(ring), origin, direction)
         plane_name = "wall"
     elif geometry_type in {"floor", "ceiling"}:
         if len(vertices) < 3:

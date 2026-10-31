@@ -18,8 +18,7 @@ import tempfile
 import textwrap
 from types import SimpleNamespace
 
-from scripts.tool_scripts import run_bim_agent as runner
-from scripts.tool_scripts.bim_agent_guidance import build_guide, filter_tool_catalog
+from scripts.tool_scripts.bim_agent_guidance import build_guide
 from src.agent.runtime_roles.guidance import get_role_guide
 from src.agent.runtime_roles.readers import ReaderTools
 from src.agent.runtime_roles.elevation import ElevationReaderTools, ELEVATION_COORDINATES
@@ -62,15 +61,6 @@ def _execute(statement, values):
 def _single_tasks():
     from src.agent.runtime_entry import execute
     result = {}
-    for mode in ("cold", "seed", "plan", "mesh"):
-        for declared in (False, True):
-            env = {"args": SimpleNamespace(scope="<scope>", timeout="<seconds>"),
-                   "plan_image": "<image>", "plan_recovery": mode == "plan",
-                   "seed_path": mode == "seed", "mesh_input": mode == "mesh",
-                   "building_input": declared}
-            for name in ("continuation", "declaration_prompt", "prompt"):
-                env[name] = _evaluate(_assignment(runner.run_experiment, name), env)
-            result[f"claude_code/{mode}/declaration={declared}"] = env["prompt"]
     # The runtime's first user message, with a symbolic declaration and image.
     admitted = {key: f"<{key}>" for key in ("raw_sha256", "declaration", "field_semantics", "conflict_policy")}
     env = {"json": json, "base64": base64, "task": "<scope>", "admitted": admitted,
@@ -122,14 +112,6 @@ def _role_task(role):
     return _evaluate(_assignment(RoleSession.run_reader, "content"), env)
 
 
-def _readonly_guide():
-    command = _assignment(runner.subscription, "command")
-    for index, node in enumerate(command.elts):
-        if isinstance(node, ast.Constant) and node.value == "--system-prompt":
-            return _evaluate(command.elts[index + 1], {"readonly": True})
-    raise ValueError("subscription system-prompt expression changed")
-
-
 def _fingerprint(tools, guidance, task):
     parts = {"tools_sha256": _hash(tools), "guidance_sha256": _hash(guidance),
              "task_template_sha256": _hash(task)}
@@ -137,12 +119,12 @@ def _fingerprint(tools, guidance, task):
 
 
 class _Catalog:
-    """Already-probed catalog, with exactly the production visibility filter."""
+    """Current tool catalog shared with the production role wrappers."""
     def __init__(self, tools, directory):
         self.tools, self.run_directory = tools, directory
 
     async def list_tools(self):
-        return filter_tool_catalog(self.tools)
+        return self.tools
 
 
 async def domain_fingerprints(root=ROOT):
@@ -167,30 +149,17 @@ async def domain_fingerprints(root=ROOT):
                 tools = await client.list_tools()
             raw_catalogs[mode] = tools
             catalogs[mode] = _hash(tools)
-            projections, guides = {}, {}
-            for review in (False, True):
-                for continuation in (False, True):
-                    flags = {"review_detail": review, "continuation": continuation}
-                    key = f"review={review}/continuation={continuation}"
-                    projections[key] = filter_tool_catalog(tools, **flags)
-                    for kind in (None, "drawings", "mesh_views", "photos", "unknown"):
-                        guides[f"{key}/images={kind}"] = build_guide(images=kind, mesh=mesh, **flags)
-            if mode.startswith("readonly"):
-                guides["claude_code/local_question"] = _readonly_guide()
-            else:
-                # The optional Claude Code worker receives its real wrapper
-                # text plus run_guide. Model selection is recorded per run.
-                workers = json.loads(runner.worker_agents(run, "haiku"))
-                guides["claude_code/worker"] = {name: {key: worker[key] for key in ("description", "prompt")}
-                                               for name, worker in workers.items()}
+            projections = tools
+            guides = {f"images={kind}": build_guide(images=kind, mesh=mesh)
+                      for kind in (None, "drawings", "mesh_views", "photos", "unknown")}
             modes[f"single_model/{mode}"] = _fingerprint(projections, guides, tasks)
             if mode == "coordinator_mesh":
                 modes["mesh_workers/coordinator"] = _fingerprint(
-                    {key: [*value, *mesh_worker_tool_specs()] for key, value in projections.items()},
+                    [*projections, *mesh_worker_tool_specs()],
                     {"base": guides, "optional_workers": MESH_WORKERS}, tasks)
         limits = RunLimits(model_calls=1, tool_calls=1, seconds=1, tokens=1)
         modes["mesh_workers/observer"] = _fingerprint(
-            filter_tool_catalog(raw_catalogs["readonly_mesh"]), WORKER_GUIDANCE,
+            raw_catalogs["readonly_mesh"], WORKER_GUIDANCE,
             mesh_worker_task_payload({"request": "<frozen-task>", "inputs": "<frozen-inputs>",
                                       "source_snapshot": "<optional-source-snapshot>"}, limits))
         with EventStore(base / "roles", run_id="fingerprints", task_id="coordinator",

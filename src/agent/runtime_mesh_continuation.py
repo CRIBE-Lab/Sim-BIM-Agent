@@ -57,8 +57,7 @@ def continuation_parent(source):
         return None
     manifest = source.read_json("continuation_manifest.json")
     anchors = [source.resolve(event.payload.result_content) for event in source.events
-        if event.payload.event_type == "external_coordinator_mcp"
-        and event.payload.method == "continuation.import_context"]
+        if event.payload.event_type == "context_import"]
     if len(anchors) != 1:
         raise ValueError("continuation ancestry has no unique durable import")
     anchor = anchors[0]
@@ -336,7 +335,7 @@ def inspect_mesh_continuation(source_path, destination, requested_limits, *, roo
     if versions.get("mode") != "single_model" or source.task_id != "coordinator":
         raise ValueError("mesh continuation requires an original single-model coordinator")
     manifest = source.read_json("bim/inputs.json")
-    if manifest.get("input_mode") != "native_mesh_agent_experiment":
+    if manifest.get("input_mode") != "native_mesh":
         raise ValueError("continuation source is not admitted native mesh input")
     imported = ImportedContext(source)
     if imported.saved["versions"] != versions:

@@ -1,6 +1,6 @@
 """Post-regularisation source hard rules for a candidate save gate.
 
-The source is inspected directly in x, y and z; no EP slicing or GT is used.
+Inspect source geometry directly in x, y and z.
 The report never edits geometry. Axis-strip rules require axis-orthogonal space
 rings; other plan shapes remain explicit coverage limits. Z gaps are independent.
 """
@@ -172,9 +172,8 @@ def precision_report(source, *, floor_evidence=(), wall_references=()):
         lf, uf = lower['id'], upper['id']
         pairs.append([lf, uf])
         # Source BIM floors persist their clear storey extent as ``height``.
-        # Accept ``ceiling_height`` only as a compatibility fallback for
-        # pre-source fixtures; a missing height cannot support a Z hard rule.
-        lower_height = lower.get('height', lower.get('ceiling_height'))
+        # A missing height cannot support a vertical precision check.
+        lower_height = lower.get('height')
         if lower_height is None:
             raise ValueError(f"Floor {lf!r} has no height for the vertical precision gate")
         separation = upper['z_floor'] - (lower['z_floor'] + lower_height)

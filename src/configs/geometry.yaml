@@ -1,0 +1,2 @@
+# Minimum edge length used to align plan linework, in metres.
+min_edge_length_m: 0.1

@@ -43,7 +43,7 @@ class CnyPriceSchedule:
 
 
 _PARATERA_PRICE_SOURCE = (
-    "AI_agent/workflow/models.md (2026-10-03 bill-derived rates; estimate only)"
+    "Observed Paratera bills dated 2026-10-03; estimated rates, not a current provider quote"
 )
 
 _PARATERA_PRICES = {

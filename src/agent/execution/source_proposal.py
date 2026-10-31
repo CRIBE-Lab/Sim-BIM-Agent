@@ -1,6 +1,6 @@
-"""Export an agent-supplied legacy geometry proposal as an inspectable source BIM.
+"""Export a geometry proposal as source BIM and an interactive HTML viewer.
 
-This entry point has no correction-run authority.  It stores the proposal as it
+This entry point stores the proposal as it
 was supplied, validates/builds a fresh source BIM candidate, and leaves both
 drawing fidelity and human confirmation explicitly unevaluated.
 """
@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from time import perf_counter
 
-from src.agent.correction.parse import ensure_corrected_geometry
+from src.agent.geometry_model.parse import parse_geometry
 from src.agent.geometry.source_bim import build_source_bim, source_view_geometry
 from src.agent.geometry.source_model import _digest
 from src.agent.geometry.source_naming import public_names_for_display, public_reference_map, public_reference_text
@@ -43,7 +43,7 @@ def _validate_proposal(proposal: dict) -> tuple[dict, list[str], list[str], dict
         raise ValueError("proposal fields: " + "; ".join(details))
     if not isinstance(proposal["geometry"], dict):
         raise TypeError("proposal.geometry must be an object")
-    # Legacy Window permits extra fields, but source generation always emits
+    # Window permits extra fields, but source generation always emits
     # entries from this collection as windows. Reject a conflicting declaration
     # before that can silently turn an explicitly identified door into glazing.
     windows = proposal["geometry"].get("windows", [])
@@ -94,10 +94,9 @@ def build_source_viewer_html(display: dict, *, source_geometry_ready: bool,
     if not source_geometry_ready:
         title = "源 BIM 候选：几何检查有严重问题，仍保留查看结果"
     viewer = build_viewer_html(display, title=title, mesh_path=mesh_path)
-    references = public_reference_map(display["source_model"], public_names_for_display(display["source_model"]))
+    references = public_reference_map(public_names_for_display(display["source_model"]))
     banner = (
-        '<aside style="position:fixed;bottom:12px;left:12px;z-index:30;background:white;padding:10px;'
-        'max-width:55vw;max-height:45vh;overflow:auto">'
+        '<aside class="source-notes" aria-label="模型来源与说明">'
         f"<strong>{html.escape(title)}</strong><br>"
         "模型提交的几何方案；原图保真尚未核对，未经人工确认。"
         "<details><summary>假设</summary><ul>" + _html_list(assumptions, references) + "</ul></details>"
@@ -105,7 +104,7 @@ def build_source_viewer_html(display: dict, *, source_geometry_ready: bool,
         '<a href="report.json">质量与来源记录</a> · <a href="proposal.json">原始方案</a> · '
         '<a href="source_model.json">源模型</a></aside>'
     )
-    return viewer.replace("</body>", banner + "</body>")
+    return viewer.replace('<div id="rinfo">', '<div id="rinfo">' + banner, 1)
 
 
 def _require_vertical_continuity(source: dict, policy: str | None) -> None:
@@ -145,15 +144,13 @@ def compile_source_proposal(proposal: dict, *, provenance: dict | None = None,
         "status": "not_evaluated",
         "source_geometry_ready": False,
         "model_calls": 0,
-        "solver_calls": 0,
-        "scope": "agent-supplied geometry to independent source BIM; no correction run or solver stage",
+        "scope": "agent-supplied geometry to independent source BIM; deterministic input validation and source construction",
         "drawing_fidelity": "not_evaluated",
         "human_confirmation": "not_evaluated",
         "source_geometry_self_consistency": "not_evaluated",
         "not_evaluated": [
             "original drawing fidelity and completeness",
             "human confirmation",
-            "thermal properties and EnergyPlus adaptation",
         ],
     }
     try:
@@ -171,17 +168,16 @@ def compile_source_proposal(proposal: dict, *, provenance: dict | None = None,
         report["agent_assumptions"] = assumptions
         report["unresolved"] = unresolved
 
-        geom = ensure_corrected_geometry(geometry)
-        # Legacy Floor accepts extra fields without hydrating their types. Keep
-        # explicitly supplied per-floor rings usable after JSON save/reload,
-        # just as in the existing typed geometry entry point.
-        from src.agent.correction.schema import FootprintRing
+        geom = parse_geometry(geometry)
+        # Orthogonal inputs may explicitly supply a per-floor footprint.
+        # Hydrate that record after JSON save/reload before geometric checks.
+        from src.agent.geometry_model.schema import FootprintRing
         for floor in geom.floors:
             footprint = getattr(floor, "footprint", None)
             if isinstance(footprint, dict):
                 floor.footprint = FootprintRing.model_validate(footprint)
         # Check the values the existing schema actually passes to the kernel,
-        # including legacy numeric strings; the original proposal stays intact.
+        # including numeric strings accepted by the input schema; the original proposal stays intact.
         from src.agent.geometry.input_scale import check_geometry_scale
         check_geometry_scale(geom.model_dump(mode="json"))
         stage("proposal_admission_seconds")
@@ -214,7 +210,7 @@ def compile_source_proposal(proposal: dict, *, provenance: dict | None = None,
             source["wall_dimension_report"] = convert_wall_dimensions(walls, proposal.get("wall_dimensions", []))
             report["wall_dimension_report"] = source["wall_dimension_report"]
         # The standalone BIM must retain the same caveats as its HTML/report.
-        # Keep this adapter metadata out of the legacy kernel and its outputs.
+        # Keep view metadata separate from source geometry.
         if "mesh_frame" in proposal:
             from src.agent.geometry.mesh_bim_frame import validate_mesh_frame
             source["mesh_frame"] = validate_mesh_frame(proposal["mesh_frame"])

@@ -26,7 +26,7 @@ def reference_line_policy(manifest):
 def validate_reference_line_adoption(toolkit, proposal, reference):
     """Validate internally saved adoption before replacing a world-vertex test.
 
-    Missing proof retains the historical vertex test.  Invalid proof fails;
+    Without analytic proof, declared vertices are checked. Invalid proof fails;
     supplying a reference never changes overlap, host or topology constraints.
     Historical references do not acquire additional requirements.
     """

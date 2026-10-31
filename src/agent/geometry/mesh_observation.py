@@ -1159,19 +1159,16 @@ class MeshObservation:
             hit_indices = np.asarray(data["pixel_indices"], dtype=np.int64)
             world_points = np.asarray(data["world_points"], dtype=np.float64)
             face_ids = np.asarray(data["face_ids"], dtype=np.int64)
-            operation_yaw = (
-                float(data["operation_yaw_degrees"].item())
-                if "operation_yaw_degrees" in data.files
-                else None
-            )
-            has_contract = "measurement_contract" in data.files
-            if (has_contract and str(data["measurement_contract"].item()) != "opaque-or-unambiguous-blend-v1"):
+            required = {"operation_yaw_degrees", "measurement_contract", "transparent_composite_indices"}
+            if not required.issubset(data.files):
+                raise ValueError("render pixel buffer is missing its measurement contract; render a new view")
+            operation_yaw = float(data["operation_yaw_degrees"].item())
+            if not math.isfinite(operation_yaw):
+                raise ValueError("render pixel buffer operation yaw must be finite")
+            if str(data["measurement_contract"].item()) != "opaque-or-unambiguous-blend-v1":
                 raise ValueError("unsupported render measurement contract")
-            if ((has_contract or any(part.alpha_mode == "BLEND" for part in self._parts))
-                    and (not has_contract or "transparent_composite_indices" not in data.files)):
-                raise ValueError("BLEND-aware render measurement contract and invalid indices are required")
-            invalid_indices = (np.asarray(data["transparent_composite_indices"], dtype=np.int64)
-                               if "transparent_composite_indices" in data.files else np.empty(0, dtype=np.int64))
+            invalid_indices = np.asarray(data["transparent_composite_indices"], dtype=np.int64)
+
         if image_shape.shape != (2,) or np.any(image_shape <= 0):
             raise ValueError(f"invalid image shape in render pixel buffer: {npz_path}")
         if (
@@ -1219,19 +1216,13 @@ class MeshObservation:
                     "world_xyz": point.tolist(),
                     "face_id": face_id,
                 }
-                if operation_yaw is not None and math.isfinite(operation_yaw):
-                    part, local_face_id = self._face_location(face_id)
-                    if id(part) not in evidence_vertices:
-                        evidence_vertices[id(part)] = part.vertices @ _yaw_matrix(operation_yaw).T
-                    vertices = evidence_vertices[id(part)]
-                    result["triangle_surface_evidence"] = self._triangle_evidence(
-                        part, local_face_id, vertices
-                    )
-                else:
-                    result["triangle_surface_evidence"] = None
-                    result["triangle_surface_evidence_unavailable_reason"] = (
-                        "legacy pixel buffer does not record its operation yaw"
-                    )
+                part, local_face_id = self._face_location(face_id)
+                if id(part) not in evidence_vertices:
+                    evidence_vertices[id(part)] = part.vertices @ _yaw_matrix(operation_yaw).T
+                vertices = evidence_vertices[id(part)]
+                result["triangle_surface_evidence"] = self._triangle_evidence(
+                    part, local_face_id, vertices
+                )
                 results.append(result)
                 hit_points.append(point)
             else:

@@ -18,22 +18,6 @@ def match_ids(value):
 
 
 def load_match(session, identity):
-    if identity.startswith("elevation_match:"):
-        # Old inner IDs are deterministic aliases, never a second public ID.
-        choices = []
-        for path in (session.store.directory / "role_matches").glob("*.json"):
-            value = json.loads(path.read_bytes())
-            report = value["result"]
-            legacy = report.get("match_id")
-            if legacy is None:
-                from .elevation import _canonical_hash
-                legacy = "elevation_match:" + _canonical_hash({k: v for k, v in report.items()
-                                                               if k != "source_file_sha256"})[:24]
-            if identity == legacy:
-                choices.append(value["match_id"])
-        if len(choices) != 1:
-            raise ValueError(f"旧内层对位编号无法唯一对应；请使用外层 match_id，候选对应：{choices}")
-        identity = choices[0]
     if len(identity) != 64 or any(c not in "0123456789abcdef" for c in identity):
         raise ValueError("match_id must be the hash returned by match_elevation")
     path = session.store.directory / "role_matches" / (identity + ".json")

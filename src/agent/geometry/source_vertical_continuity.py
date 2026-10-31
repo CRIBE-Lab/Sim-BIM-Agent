@@ -11,7 +11,7 @@ from itertools import combinations
 
 from shapely.geometry import Polygon
 
-from src.agent.correction.schema import VerticalSeparation
+from src.agent.geometry_model.schema import VerticalSeparation
 from src.agent.geometry.source_bim import EPS
 from src.agent.geometry.source_volume import space_polygon_at_z
 from src.agent.roles import require_role

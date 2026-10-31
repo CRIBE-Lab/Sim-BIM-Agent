@@ -58,7 +58,7 @@ def render_mesh_bim_overlay(picture, observation, source, *, floor_id=None, exte
     """Project saved source edges with explicit X-ray or source visibility semantics."""
     from shapely.ops import unary_union
 
-    from src.agent.geometry.openings import _frame, _lift, _project
+    from src.agent.geometry.surfaces import wall_frame, lift_from_wall, project_to_wall
     from src.agent.geometry.source_bim import _parts, _wall_polygon
     from src.agent.geometry.source_model import _digest
     from src.agent.geometry.source_visibility import (
@@ -103,25 +103,25 @@ def render_mesh_bim_overlay(picture, observation, source, *, floor_id=None, exte
             boundary_parts.append({**boundary, 'holes': boundary.get('holes', [])})
             continue
         origin = boundary['vertices'][0][:2]
-        direction, _ = _frame(origin, boundary['vertices'][1][:2])
+        direction, _ = wall_frame(origin, boundary['vertices'][1][:2])
         parent = _wall_polygon(SimpleNamespace(vertices=boundary['vertices'], holes=boundary.get('holes', [])))
         contacts = []
         for relation in source.get('boundary_relations', []):
             if boundary['id'] not in relation.get('boundary_ids', []):
                 continue
             for region in relation.get('regions', []):
-                patch = _project(region['vertices'], origin, direction)
+                patch = project_to_wall(region['vertices'], origin, direction)
                 if region.get('holes'):
                     patch = patch.difference(unary_union(
-                        [_project(hole, origin, direction) for hole in region['holes']]))
+                        [project_to_wall(hole, origin, direction) for hole in region['holes']]))
                 contacts.append(patch)
         contact = unary_union(contacts)
         exterior = parent.difference(contact) if contacts else parent
         for part in _parts(exterior):
             boundary_parts.append({
                 **boundary,
-                'vertices': _lift(list(part.exterior.coords)[:-1], origin, direction),
-                'holes': [_lift(list(ring.coords)[:-1], origin, direction)
+                'vertices': lift_from_wall(list(part.exterior.coords)[:-1], origin, direction),
+                'holes': [lift_from_wall(list(ring.coords)[:-1], origin, direction)
                           for ring in part.interiors],
             })
     yaw = observation['source_coordinate_transform']['yaw_degrees_counterclockwise_about_positive_z']

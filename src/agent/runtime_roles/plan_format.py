@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from jsonschema import Draft202012Validator, validators
 
 from scripts.tool_scripts.bim_agent_guidance import REFERENCES
-from src.agent.correction.schema import RoomRoleEvidence
+from src.agent.geometry_model.schema import RoomRoleEvidence
 from src.agent.geometry.plan_partition import (
     _OPENING_FIELDS, _PARTITION_FIELDS, _PLAN_FIELDS, _REQUIRED_PLAN_FIELDS, _SEED_FIELDS, _seed_role,
 )
@@ -23,8 +23,7 @@ PLAN_EXAMPLE, _ = json.JSONDecoder().raw_decode(_REFERENCE[_REFERENCE.index('{"f
 
 
 def _reader_example(example):
-    """The same plan at image scale. The shared example's single-digit pixels read
-    like metres, and a reader copied that into world-metre points (10-06 probe)."""
+    """Scale the shared plan example to clear original-image pixel coordinates."""
     def pixel(value, offset):
         value = offset + 40 * value
         return int(value) if float(value).is_integer() else value
@@ -120,9 +119,7 @@ PLAN_FORMAT = _object({
     # these inert audit/priority records so an aligned draft can be replayed.
     "regularization_inputs": {"type": "object"},
     "regularization": {"type": "object"},
-}, _REQUIRED_PLAN_FIELDS - {"z_floor", "ceiling_height", "reading_type", "wall_metadata"})
-PLAN_FORMAT["allOf"] = [{"if": {"required": ["reading_type"], "properties": {"reading_type": {"const": "plan"}}},
-    "else": {"required": ["z_floor", "ceiling_height"]}}]
+}, (_REQUIRED_PLAN_FIELDS - {"z_floor", "ceiling_height", "wall_metadata"}) | {"reading_type"})
 OPENING["required"] = [field for field in OPENING["required"] if field not in {"z", "source_refs"}]
 assert set(PLAN_FORMAT["properties"]) == set(_PLAN_FIELDS) | {"dimension_chains"}
 assert set(OPENING["properties"]) == _OPENING_FIELDS
@@ -155,10 +152,6 @@ def plan_format_errors(plan):
     for error in _Validator(PLAN_FORMAT).iter_errors(value):
         errors.append({"path": _path(error.absolute_path), "message": error.message})
     if isinstance(value, Mapping):
-        if value.get("reading_type") != "plan":
-            for i, row in enumerate(value.get("openings", []) if isinstance(value.get("openings"), list) else []):
-                if isinstance(row, Mapping) and "z" not in row:
-                    errors.append({"path": f"plan.openings[{i}].z", "message": "required for a 3D plan; use reading_type='plan' for a 2D reading"})
         if "wall_metadata" in value:
             from src.agent.geometry.reader_wall_metadata import validate_wall_metadata
             try:

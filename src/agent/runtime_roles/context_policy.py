@@ -15,10 +15,8 @@ class EffectiveRoleContext(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     context_tokens: int | None = Field(default=None, ge=1)
-    active_window_messages: int | None = Field(default=None, ge=1)
     compact_at_tokens: int | None = Field(default=None, ge=1)
     compact_to_ratio: float = Field(gt=0, lt=1)
-    large_result_bytes: int = Field(ge=1)
     max_images: int | None = Field(default=None, ge=1)
     max_image_bytes: int | None = Field(default=None, ge=1)
 

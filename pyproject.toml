@@ -10,10 +10,8 @@ dependencies = [
     "httpcore==1.0.9",
     "httpx==0.28.1",
     "jsonschema==4.26.0",
-    "loguru==0.7.3",
     "mcp==1.27.0",
     "numpy==2.4.4",
-    "omegaconf==2.3.0",
     "pillow==12.2.0",
     "portalocker==3.2.0",
     "pydantic==2.13.3",
@@ -24,9 +22,6 @@ dependencies = [
     "shapely==2.1.2",
     "trimesh==4.11.5",
 ]
-
-[project.scripts]
-sim-bim-agent = "src.agent.product_cli:main"
 
 [tool.uv]
 package = false

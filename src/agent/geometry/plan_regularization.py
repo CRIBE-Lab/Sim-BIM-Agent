@@ -321,13 +321,12 @@ def _complete_open_passage_boundaries(plan: dict, opening: dict, host: dict,
                                       moving: dict, calibration: dict) -> dict | None:
     """Identify the two terminal walls of one evidence-backed open passage.
 
-    This is a narrow compatibility path for saved drafts that encoded a
-    complete passage as ``door/state=open``.  It deliberately does not inspect
-    IDs or source-ref prose, and ordinary open doors do not qualify merely from
-    their state.
+    Only an explicit empty aperture can span the complete passage. An open
+    door retains its measured width; opening state alone never changes kind.
+    Structured gap observations and both terminal walls must support the span.
     """
     identity = opening.get("id")
-    if (opening.get("kind") not in {"door", "open"}
+    if (opening.get("kind") != "open"
             or opening.get("state") != "open"
             or not isinstance(identity, str)
             or not _structured_gap_support(plan, identity)
@@ -423,7 +422,7 @@ def _complete_open_passage_boundaries(plan: dict, opening: dict, host: dict,
         "p1": first,
         "p2": second,
         "inference": {
-            "basis": "structured_complete_open_passage_compatibility",
+            "basis": "structured_complete_open_passage",
             "state": "open",
             "structured_gap_support": True,
             "complete_between_terminal_boundaries": True,
@@ -2145,7 +2144,7 @@ def regularize_plan(plan: dict, *, image_size: tuple[int, int], image_name: str,
         raise TypeError("plan must be an object")
     from src.agent.geometry.lite_bim_regularization import lite_grid_step, regularize_lite_plan
     # A trusted run policy overrides model-supplied audit metadata. The default
-    # retains the existing opt-in contract for historical/offline callers.
+    # uses the explicit plan setting when no run-level override is supplied.
     lite_step = grid_step_m if grid_step_m is not None else lite_grid_step(plan)
     if lite_step is not None and not _before_lite_grid:
         result, lite_report = regularize_lite_plan(
@@ -2735,15 +2734,6 @@ def validate_regularized_plan_stack(items: list[dict], *, rule_version: str = RU
             "coverage": {"floors": [item["floor_id"] for item in ordered], "adjacent_pairs": pairs}}
 
 
-def enforce_regularized_plan_stack(items: list[dict], *, rule_version: str = RULE_VERSION) -> dict:
-    report = validate_regularized_plan_stack(items, rule_version=rule_version)
-    if report["violations"]:
-        first = report["violations"][0]
-        raise PlanRegularizationError(
-            f"Plan-stack hard constraints rejected {first['type']}: {first.get('fix', 'review the reported objects and dimensions')}",
-            report=report,
-        )
-    return report
 
 
 def regularize_plan_stack(

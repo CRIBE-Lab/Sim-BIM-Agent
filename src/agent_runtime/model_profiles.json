@@ -32,6 +32,38 @@
       "output_limit_source": "Official catalog maximum is 393216; 32000 is a local reservation choice for reader testing, not a measured minimum."
     },
     {
+      "canonical_name": "DeepSeek-V4.1-Flash",
+      "aliases": [
+        "deepseek-v4.1-flash"
+      ],
+      "context_window_tokens": 1048576,
+      "native_context_window_tokens": null,
+      "extended_context_window_tokens": null,
+      "endpoint_context_window_tokens": null,
+      "context_limit_kind": "upstream_limit_with_unverified_gateway_cap",
+      "context_source": "https://api-docs.deepseek.com/quick_start/pricing/ (2026-11-01); Go routing: https://opencode.ai/v2/docs/console/go/",
+      "context_uncertainty": "Go and Paratera expose this exact model ID. The upstream 1,048,576-token limit is a local planning ceiling; neither gateway has been saturated independently.",
+      "text_estimator": "unicode_chars_v1",
+      "text_estimate_offset": 0,
+      "text_safety_factor": 2.0,
+      "text_fixed_margin": 128,
+      "safety_margin_source": "Uncalibrated gateway reservation with a 2x text margin; not provider billing evidence.",
+      "reasoning_may_exceed_max_tokens": false,
+      "reasoning_token_allowance": 0,
+      "reasoning_allowance_source": "https://api-docs.deepseek.com/api/create-chat-completion documents max_tokens as including reasoning and final output; actual response usage remains authoritative.",
+      "image_estimator": "deepseek_vision_max1024_v1",
+      "image_patch_size": 1,
+      "image_merge_size": 1,
+      "image_min_pixels": 1,
+      "image_max_pixels": 1690000,
+      "image_special_tokens": 0,
+      "image_source": "https://api-docs.deepseek.com/guides/vision/ documents a maximum of 1024 tokens per image.",
+      "image_uncertainty": "Reserve the upstream documented 1024 tokens per image; gateway image preprocessing and billing have not been independently calibrated.",
+      "profile_status": "upstream_limits_with_unverified_gateway_reservations",
+      "recommended_min_output_tokens": 32000,
+      "output_limit_source": "Upstream Flash maximum is 393216; 32000 remains a local reservation choice. Gateway acceptance is not an output-limit attestation."
+    },
+    {
       "canonical_name": "Qwen3.8-27B",
       "aliases": [
         "qwen3.8-27b",
@@ -129,7 +161,7 @@
       "image_uncertainty": "The official 14-pixel patch and 2x merge grid exactly matched Paratera at 224x224 and 896x896. It conservatively overestimated the 1600x1200 synthetic request by 1,139 image tokens; Paratera image preprocessing is not attested.",
       "profile_status": "sourced_and_paratera_calibrated_with_deployment_uncertainty",
       "recommended_min_output_tokens": 32000,
-      "output_limit_source": "AI_agent/logs/experiments/2026-10-03_migration_comparison/README.md: attempt 1 exhausted 16,384 output tokens (16,377 reasoning); Claude Code baseline cap was 32,000 and one baseline turn reasoned for about 19,600 tokens. This is a recommendation, not a guarantee against truncation."
+      "output_limit_source": "Observed on 2026-10-03: a request exhausted 16,384 output tokens, including 16,377 reasoning tokens; another used about 19,600 reasoning tokens. The 32,000-token recommendation allows more reasoning but does not guarantee against truncation."
     },
     {
       "canonical_name": "gpt-6-astra",

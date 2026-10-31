@@ -1,4 +1,4 @@
-"""One saved-BIM result contract, including reads of pre-contract run archives.
+"""The saved-BIM result contract for current tool operations.
 
 ``saved_candidate`` is the final usable source, never a failed attempt or the
 transaction's starting candidate. Effects distinguish durable audit writes from
@@ -9,10 +9,6 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
-
-
-SAVE_TOOLS = frozenset({"build_bim", "build_plan_bim", "assemble_plan_bim",
-    "build_parametric_bim", "revise_bim", "revise_plan_bim", "finish_bim", "claim_transaction"})
 
 
 def opening_delivery_summary(toolkit, source):
@@ -255,61 +251,11 @@ def full_result_metadata(raw, run):
     return {**meta, **saved}
 
 
-def read_saved_result(data, *, tool=None, run=None):
-    """Read live results directly; one conservative adapter for older archives.
-
-    No consumer maintains its own saving-tool list. Inspection results cannot
-    select a candidate merely because they mention one. Failed later entries do
-    not discard earlier commits. Legacy geometry application requires evidence.
-    """
-    if "saved_candidate" in data:
-        return saved_result({}, candidate=data["saved_candidate"],
-            created=data.get("save_effects", {}).get("created_candidates", []),
-            geometry_applied=data.get("save_effects", {}).get("geometry_applied", False),
-            audit_written=data.get("save_effects", {}).get("audit_written", False))
-    empty = saved_result({})
-    if tool not in SAVE_TOOLS:
-        return empty
-    if tool == "claim_transaction":
-        entries = [row for row in data.get("entries", [])
-                   if row.get("status") == "applied" and row.get("result_candidate")]
-        committed = [row["result_candidate"] for row in entries]
-        applied, parent = False, data.get("candidate")
-        for row in entries:
-            effects = row.get("save_effects")
-            if effects is not None:
-                applied |= effects.get("geometry_applied", False)
-            elif run is not None and parent:
-                root = Path(run).resolve()
-                paths = [(root / str(c) / "source_model.json").resolve()
-                         for c in (parent, row["result_candidate"])]
-                if all(p.is_relative_to(root) and p.is_file() for p in paths):
-                    applied |= _geometry(json.loads(paths[0].read_bytes())) != _geometry(json.loads(paths[1].read_bytes()))
-            parent = row["result_candidate"]
-        return saved_result({}, candidate=committed[-1] if committed else None,
-            created=committed, geometry_applied=applied, audit_written=bool(data.get("audit_file")))
-    candidate = data.get("candidate")
-    if not isinstance(candidate, str) or data.get("error") or data.get("status") in {"failed", "error"}:
-        return empty
-    ready = data.get("source_geometry_ready")
-    if ready is None and run is not None:
-        root = Path(run).resolve()
-        folder = (root / candidate).resolve()
-        if folder.parent == root:
-            report = folder / "report.json"
-            if report.is_file():
-                ready = json.loads(report.read_bytes()).get("source_geometry_ready")
-            if ready is None and (folder / "source_model.json").is_file():
-                ready = True
-    if ready is not True:
-        # Old returns sometimes named only the attempt; its persisted report
-        # still decides domain failure, even when no usable source was saved.
-        empty["source_geometry_ready"] = ready
-        return empty
-    app = data.get("claim_application", {})
-    applied = (app.get("status") == "applied" and
-        app.get("geometry_before_sha256") != app.get("geometry_after_sha256"))
-    if not app and tool not in {"revise_bim", "finish_bim"}:
-        applied = True
-    return saved_result({}, candidate=candidate, created=[] if tool == "finish_bim" else [candidate],
-        geometry_applied=applied, audit_written=True)
+def read_saved_result(data):
+    """Read explicit save effects; mentioning a candidate cannot declare a save."""
+    if "saved_candidate" not in data:
+        return saved_result({})
+    return saved_result({}, candidate=data["saved_candidate"],
+        created=data.get("save_effects", {}).get("created_candidates", []),
+        geometry_applied=data.get("save_effects", {}).get("geometry_applied", False),
+        audit_written=data.get("save_effects", {}).get("audit_written", False))

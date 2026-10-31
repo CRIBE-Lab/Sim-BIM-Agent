@@ -19,7 +19,7 @@ import time
 from jsonschema import Draft202012Validator
 
 from scripts.tool_scripts.bim_agent_replies import measurement_summary as _measurement_summary
-from src.agent.runtime_delegation import update_observer_budget
+from src.agent.runtime_worker_budget import update_observer_budget
 from src.agent.runtime_tools import FrozenBimTools, frozen_bim_client, local_observer_role
 from src.agent_runtime.adapter import convert_tool_result
 from src.agent_runtime.budget import RuntimeBudget

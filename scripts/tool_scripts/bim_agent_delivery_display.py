@@ -17,7 +17,7 @@ def render_regularization_html(source: dict, audit: dict | None = None) -> str:
     if not reports:
         return ""
     names = public_names_for_display(source)
-    references = public_reference_map(source, names)
+    references = public_reference_map(names)
     spaces = {row["id"]: row for row in source.get("spaces", [])}
 
     def escaped(value):
@@ -138,7 +138,7 @@ def render_delivery_html(result: dict, source: dict) -> str:
     selection_origin = result["selection_origin"]
     current_claims = result["current_claim_state"]
     names = public_names_for_display(source)
-    references = public_reference_map(source, names)
+    references = public_reference_map(names)
 
     def text_html(value):
         return html.escape(public_reference_text(value, references))
@@ -228,17 +228,13 @@ def render_delivery_html(result: dict, source: dict) -> str:
     counts = result["counts"]
     geometry_status = {"pass":"通过", "warning":"有警告", "severe":"有严重问题"}.get(
         (result.get("source_validation") or {}).get("status"), "未评价")
-    deterministic_replay = selection_origin == "developer_selected_deterministic_trace_replay"
-    selected = ("开发侧选定的局部轮廓确定性应用" if deterministic_replay else
-                "模型选定" if selection_origin == "agent_selected" else
+    selected = ("模型选定" if selection_origin == "agent_selected" else
                 "系统保留的最新候选，模型未显式选定")
     run_status = result["generation_status"]
     run_note = {"completed":"本次模型调用正常结束。", "in_progress":"模型调用尚未结束。",
                 "interrupted":"本次模型调用未正常完成，以下保留已生成候选。"}[run_status["state"]]
     if run_status.get("handoff_saved"):
         run_note = "已选定并保存 BIM，未完成事项见下方。"
-    if deterministic_replay:
-        run_note = "本次由代码应用已保存的局部观察，未调用模型生成整案；不代表自主冷启动完成。"
     if run_status.get("error"):
         run_note += " " + text_html(run_status["error"])
     floor_status = result["floor_completeness"]

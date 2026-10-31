@@ -1,9 +1,9 @@
 {
   "aliases": {},
-  "current_domain_version": "domain-product-v1-a9d1344c28ef22180a20ce74",
-  "current_runtime_version": "runtime-product-v1-00b8e71ddba394713b000f87",
+  "current_domain_version": "domain-product-v1-100662f02d35df588767be7a",
+  "current_runtime_version": "runtime-product-v1-d5dfbdd64399fce2e7350035",
   "domain_versions": {
-    "domain-product-v1-a9d1344c28ef22180a20ce74": {
+    "domain-product-v1-100662f02d35df588767be7a": {
       "coverage": "automatic_directories",
       "files": {
         ".python-version": {
@@ -16,19 +16,15 @@
         },
         "config.example.json": {
           "kind": "tool",
-          "sha256": "27d72edd5ca033d0e3b5fe3a8429b14458143a4964d0476622dc2635e1bf3c28"
+          "sha256": "99b3d0fb08659b3eccff402765a323e0bb53209579e48bc730c31a15608bf908"
         },
         "config.mesh.example.json": {
           "kind": "tool",
-          "sha256": "819e769ce82086df4282614df6e1ba39d33002b2c837d6bd98f6cca2cdd6755b"
-        },
-        "config.opencode-go-haiku.example.json": {
-          "kind": "tool",
-          "sha256": "997d4ec9116286cb5e5d98e117808d5a60c19e99c4637ed50818c2c843b10cbb"
+          "sha256": "a1382b1d35be26c9c129f927f207003066b62ff00226825bbfcb362863803599"
         },
         "config.opencode-go.example.json": {
           "kind": "tool",
-          "sha256": "eb59e7f64bfdba464a0f33e27cce77334e6ed13a147ce7e60b9080138cee66ff"
+          "sha256": "66b2bc70012a89ce9676c4edfac61d8a12c7b1c25a2a8358400a5aa2a646ad10"
         },
         "scripts/tool_scripts/bim_agent_architectural.py": {
           "kind": "tool",
@@ -36,23 +32,19 @@
         },
         "scripts/tool_scripts/bim_agent_budget.py": {
           "kind": "tool",
-          "sha256": "f599d8e40b335831e1d5d1bcc9f03eff5fbc239d7967ec081c95895afbed521d"
+          "sha256": "79da5ef55e45023b5e4920fecb01c420af4ecf3538f882245fce1825e938cd85"
         },
         "scripts/tool_scripts/bim_agent_claims.py": {
           "kind": "tool",
-          "sha256": "cf1eb5ac8830df1c78fd0478740dd8aa9eedcf2610ecd774afa07c27627391df"
+          "sha256": "f76277e9cd4016688f641e67cf5b9d60be0c58eb1b02e930ba4d650713ffc597"
         },
         "scripts/tool_scripts/bim_agent_closeout.py": {
           "kind": "tool",
           "sha256": "b32fff0cb42d82691f74bd09ec59e41e5d997a71f086ce4804af3a612894432b"
         },
-        "scripts/tool_scripts/bim_agent_continuation.py": {
-          "kind": "tool",
-          "sha256": "f82f20a5172a6f537eed979c3645397a65c4d72a9dd58ebefb52117eec6eba2b"
-        },
         "scripts/tool_scripts/bim_agent_delivery_display.py": {
           "kind": "tool",
-          "sha256": "4e046258f0d314758f67802c11899176ecade88cdc73a11302fa1e0798f9f925"
+          "sha256": "4ddd17399db6dedd9095097e47ff0ea60e8c734d70800d0160e6c08139018e38"
         },
         "scripts/tool_scripts/bim_agent_drawing_readings.py": {
           "kind": "tool",
@@ -64,15 +56,15 @@
         },
         "scripts/tool_scripts/bim_agent_facade_checks.py": {
           "kind": "tool",
-          "sha256": "cd521c8c1bbf7eaf85fbd9963f4e42b5b31c837bd657c791cfbe7f74e153ba95"
+          "sha256": "3d234ef85c2b2a8978f85bb751852226019eb2c5fc1cd163582b3360212ba9c7"
         },
         "scripts/tool_scripts/bim_agent_feedback.py": {
           "kind": "tool",
-          "sha256": "55420d64cbb900a2603b1ccda4fcd7b39b95abc9dd0881ca67e13d8f3fec3677"
+          "sha256": "8e6026d8995fe73df3c239d5dd817d647822f4fa28dd3abeb49baa80eb8fcaa8"
         },
         "scripts/tool_scripts/bim_agent_guidance.py": {
           "kind": "guidance",
-          "sha256": "6df89859cb5e34d26d21fe2c41b3cb18ee53a2af7d1bfa7cec1052fd27d735ca"
+          "sha256": "5ecbe37a4e83f46f8d6131e4136b6b712393ad8ec0caa932acc0f75e2b633fa6"
         },
         "scripts/tool_scripts/bim_agent_inference.py": {
           "kind": "tool",
@@ -80,7 +72,7 @@
         },
         "scripts/tool_scripts/bim_agent_inputs.py": {
           "kind": "task_description",
-          "sha256": "d38dcc8835cfb93328f14204b034dd57dd6dbba1a2469f5aaeb577dc55f4a3c8"
+          "sha256": "ddb2aca4b2782723e19c1bfe8534a10f81ca06712c3980334c2253ef0ffc368c"
         },
         "scripts/tool_scripts/bim_agent_mesh.py": {
           "kind": "tool",
@@ -92,7 +84,7 @@
         },
         "scripts/tool_scripts/bim_agent_mesh_review.py": {
           "kind": "tool",
-          "sha256": "d191182e09e1c742d53316878e4f2dcc17e032fda379c0c02a9325021fcb9634"
+          "sha256": "1112d26c745208ef249eae8fddc1c0279397ca7895662f28fabca59c68abee85"
         },
         "scripts/tool_scripts/bim_agent_parametric.py": {
           "kind": "tool",
@@ -112,11 +104,11 @@
         },
         "scripts/tool_scripts/bim_agent_regularization.py": {
           "kind": "tool",
-          "sha256": "1943da939e8c6651de9f9ea2d96500972f49999e1507381f00b1330f0837aa26"
+          "sha256": "71aa3a4873e37fbe370bcc355f5f466470c270ba9e787a76fad47876042bace8"
         },
         "scripts/tool_scripts/bim_agent_replies.py": {
           "kind": "tool",
-          "sha256": "3a6b5d04a3b1d8d40541b092d60c4807d05cea2cee582bfac51c7f90317e67dd"
+          "sha256": "49d7456e2036aca17ade3d8b816e8d401b092bc42278e98682731daf847c9607"
         },
         "scripts/tool_scripts/bim_agent_review_scope.py": {
           "kind": "tool",
@@ -132,11 +124,11 @@
         },
         "scripts/tool_scripts/bim_agent_saved_result.py": {
           "kind": "tool",
-          "sha256": "cc17c4ce7b6a87ff69fe5a1381b29bfd16ce353b49645a50ea674f09bc91aabf"
+          "sha256": "b7a3ed73ca4bebbbac77697510ac9753fc1073a5bcf6fd143331d55a79393974"
         },
         "scripts/tool_scripts/bim_agent_source_precision.py": {
           "kind": "tool",
-          "sha256": "69b9d7803a02b89d84ecf4504901821270e3e03c44e7e214d67c9aa5ca202a99"
+          "sha256": "36969c1b71adad0ea304e389fe284e3bd0390f9319cca73af748eb6684618b3c"
         },
         "scripts/tool_scripts/bim_agent_view_selection.py": {
           "kind": "tool",
@@ -144,11 +136,11 @@
         },
         "scripts/tool_scripts/render_geometry_viewer.py": {
           "kind": "tool",
-          "sha256": "11ef7b41135d155da5f2623a9936c1a00f6b45b058355f1c7516a7c0f7e8bd8e"
+          "sha256": "777f93d20ab91e4313ce39e503225a276c45ff668bf3e877b3bbd0fe3afe2506"
         },
         "scripts/tool_scripts/run_bim_agent.py": {
           "kind": "task_description",
-          "sha256": "263f21133a06e76c92d567a39cfd6db2202fd04e7a01bfcf63227930fd522b70"
+          "sha256": "41e13b6bac088fdda3472e45bc4b2f69335754d183df68acd081957877ddd93a"
         },
         "scripts/tool_scripts/vendor/OrbitControls.js": {
           "kind": "tool",
@@ -168,135 +160,11 @@
         },
         "src/agent/__init__.py": {
           "kind": "tool",
-          "sha256": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
+          "sha256": "54005311aecb72254ced13b51b7deb21430bd5348bc5cc06eaf0dd51bf6c8099"
         },
         "src/agent/bim_inputs.py": {
           "kind": "task_description",
-          "sha256": "b45f0626d1cf89d01198cf801346a88ff3aba1c1f8cf221b69175fa1c2b6f71b"
-        },
-        "src/agent/contracts/__init__.py": {
-          "kind": "tool",
-          "sha256": "e55c54737c6add4037278684dc976b96f4feeba79359aec71e8b27087a99c8f0"
-        },
-        "src/agent/contracts/_base.py": {
-          "kind": "tool",
-          "sha256": "60a77e6d9df21ca24431b07bd567bea56f291748e68475b52b09ea21d1c8b0c2"
-        },
-        "src/agent/contracts/bundle.py": {
-          "kind": "tool",
-          "sha256": "4b31fc7631f345678f9b89ec1a8020c65468ddeb235275e3be45a14c39086947"
-        },
-        "src/agent/contracts/declarations.py": {
-          "kind": "tool",
-          "sha256": "19fb9f767823aa52ea124d18588f4ebae5ca572368e6630faca5cb178ac8e5fc"
-        },
-        "src/agent/contracts/evidence.py": {
-          "kind": "tool",
-          "sha256": "8a991a26f68a1f1e6ffa494ec1214f87435d9a2e95a08da9d811cd62443020f1"
-        },
-        "src/agent/contracts/quality.py": {
-          "kind": "tool",
-          "sha256": "9ff02941aa927f89a02abc12acf0419104d2e99936957938a5dbc50802265333"
-        },
-        "src/agent/contracts/refs.py": {
-          "kind": "tool",
-          "sha256": "6ae3ac4fb305ab160f05bd6d4bc6d1225b56076c8b6acaffdebafad0642f8a1c"
-        },
-        "src/agent/contracts/tasks.py": {
-          "kind": "tool",
-          "sha256": "f3835e9473ed3ca2c882d29580f03340a3be3b8bc5a2a712e2356060affa1403"
-        },
-        "src/agent/correction/__init__.py": {
-          "kind": "tool",
-          "sha256": "71e7508e709a8db4c2860fcf8393aee5c8097178f31b454e1812b0cd17308df9"
-        },
-        "src/agent/correction/artifact_serialization.py": {
-          "kind": "tool",
-          "sha256": "7b3505e8e7bdae90e6caacdf98ec2bbe5f1633ab1a7ebfe26d27bfd8a62addaf"
-        },
-        "src/agent/correction/cell_geometry.py": {
-          "kind": "tool",
-          "sha256": "0e29157b27d5c141cb2a484c90438b8f67efbcc2a63469a8df488ad3682be454"
-        },
-        "src/agent/correction/claims.py": {
-          "kind": "tool",
-          "sha256": "819909a7ed74aea82a7c8a6f74448d3087b85deff6a3823c53f5ad42eff46a9b"
-        },
-        "src/agent/correction/config.py": {
-          "kind": "tool",
-          "sha256": "8c68486c46268798d4f0d8d6a575feee32601c653cd8e2a7d6423e82b60e03f3"
-        },
-        "src/agent/correction/constants.py": {
-          "kind": "tool",
-          "sha256": "bb376345b53f21ab1d3ff5b439216dfb66495dbbfd41b0f2f0abbe8d81a7e57a"
-        },
-        "src/agent/correction/deterministic.py": {
-          "kind": "tool",
-          "sha256": "631e6f6629264a906b3c8e9eae3db39233f494ec94bf8faf3732f237b4313529"
-        },
-        "src/agent/correction/envelope.py": {
-          "kind": "tool",
-          "sha256": "e290dc6608a435d198c9376c258a38de014e934d4c21fcb64f80a4be096ba863"
-        },
-        "src/agent/correction/envelope_transform.py": {
-          "kind": "tool",
-          "sha256": "d1259818eb98b5aacfa9521f1d27d93c9477f5e37e9c58d0a350ca571e7712cb"
-        },
-        "src/agent/correction/facade.py": {
-          "kind": "tool",
-          "sha256": "b1a4ad95c8320833042d1c80b65cb35813d11c670ec05ffa5faa2103fc18b402"
-        },
-        "src/agent/correction/facade_applicability.py": {
-          "kind": "tool",
-          "sha256": "691c0c4cda04d5d1cefe44641a76fce516f2349346879212abe85d935b05b1f5"
-        },
-        "src/agent/correction/facade_convention.py": {
-          "kind": "tool",
-          "sha256": "a2b30e1e9d31d0e5e4fdcedb365acd6dfd05eb023abeb61dfedcbb003d087227"
-        },
-        "src/agent/correction/facade_visibility.py": {
-          "kind": "tool",
-          "sha256": "25a63fdea54209fce24de61f27c6c269807fea13f6e96519903341065ba5676d"
-        },
-        "src/agent/correction/feature_state.py": {
-          "kind": "tool",
-          "sha256": "043b8dda65a74099ca8c6a6c0fbb688227e8ed1c20b6910abd106361729bb86d"
-        },
-        "src/agent/correction/finalize.py": {
-          "kind": "tool",
-          "sha256": "a0b2044bb67c0952c825d5031fd0ba035e402c4de08e66b28b8b9f6036f6cef0"
-        },
-        "src/agent/correction/footprint.py": {
-          "kind": "tool",
-          "sha256": "ab7b0cd9ac04bb6cb0cc88e633b7bcde545c7e314b52e9b0d7cd0da0158790e5"
-        },
-        "src/agent/correction/geometry_validator.py": {
-          "kind": "tool",
-          "sha256": "320f151f3866bcd72bffd336ac566d7d3eb48151a16de33d21489483bbf1f74f"
-        },
-        "src/agent/correction/orthogonality.py": {
-          "kind": "tool",
-          "sha256": "6134168dd749f716cfd4ec2fb53e30f337ef29b5421afe9947396b1cbe828a68"
-        },
-        "src/agent/correction/parse.py": {
-          "kind": "tool",
-          "sha256": "cc97b4906d043f1c2905f42165f2ac19311fd846d823052115a3e673290fc4d0"
-        },
-        "src/agent/correction/schema.py": {
-          "kind": "tool",
-          "sha256": "27e8e429e60f004ccaf8bec4b8cbf3714287f108fcdd4a1af29fe9a02fc4b039"
-        },
-        "src/agent/correction/window_host.py": {
-          "kind": "tool",
-          "sha256": "873f8c2cc84d0a2fe8f48ebd995b6b2e934d13ac53d7d68691039106e05b42d5"
-        },
-        "src/agent/correction/window_position.py": {
-          "kind": "tool",
-          "sha256": "fbe53de1d909a9eadbfa220c9c195933639d0648bdddd5ff2b7d2e6fbe335774"
-        },
-        "src/agent/correction/window_sources.py": {
-          "kind": "tool",
-          "sha256": "3ffc979eb9f6658d3a47bc79b7074ca4b1d8bdea3fd9c27d92c9b2855da8071c"
+          "sha256": "d269db5bcf8db300d309948b251a8dfab17aebd92e6f4c3d671f791ad702d8ef"
         },
         "src/agent/data/room_types.json": {
           "kind": "tool",
@@ -304,7 +172,7 @@
         },
         "src/agent/execution/__init__.py": {
           "kind": "tool",
-          "sha256": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
+          "sha256": "f77e44cccee24c507dc1f4679e7f2f9a59bde561a9a0780f467a9085374ed091"
         },
         "src/agent/execution/bim_claim_facts.py": {
           "kind": "tool",
@@ -316,43 +184,19 @@
         },
         "src/agent/execution/bim_claims.py": {
           "kind": "tool",
-          "sha256": "636507bd07ec11a97a5fbcdd87076ae0b510cddd3006e36d795e6848f7b159bd"
+          "sha256": "0ae8ff7f89b9916c311316abd607b1c7cd82308ae0002537faac87306af3475b"
         },
         "src/agent/execution/bim_height_coverage.py": {
           "kind": "tool",
-          "sha256": "e06ee61d08ce70cd74986769ccbdb61f8095372d9901a92a274b03c5f3634f4a"
-        },
-        "src/agent/execution/case_metadata.py": {
-          "kind": "tool",
-          "sha256": "5e6d13b3493af30e3c3a1f54096f3b4cb6e1e609bee0e429a50986353bcccf9b"
-        },
-        "src/agent/execution/manifest.py": {
-          "kind": "tool",
-          "sha256": "1b6c6f9f694869a2171c81842fbb664aac5c796d011ba9138c3ed673f0aaff3b"
-        },
-        "src/agent/execution/run_meta.py": {
-          "kind": "tool",
-          "sha256": "7aa33d2bc2cf7ce2c9b2ef1f3a7e1bc170a89b08c02bf097be90aa8dc7018ae9"
+          "sha256": "822663ad294e9d8cd106ab48e817ec543999f64a34ff1865de46c50a7d579373"
         },
         "src/agent/execution/source_proposal.py": {
           "kind": "tool",
-          "sha256": "3c69c02d2dba4feb09d9c23ef857900506f6ea30d34be95b57ef6ba859c8d629"
-        },
-        "src/agent/execution/subscription_json.py": {
-          "kind": "tool",
-          "sha256": "3e033dbe64495810bfd8a68260b03c64988a06d09d4d2945554daf2c187394ff"
-        },
-        "src/agent/execution/view_manifest.py": {
-          "kind": "tool",
-          "sha256": "6ade851f78bf502e2dbdb24440c12218a2d215b5fdd18f11b122fdb47ade5caf"
+          "sha256": "a9e5586d5d13866786b3959d4f9d82df5437c856aecf45efc6e82d083e3077e7"
         },
         "src/agent/geometry/__init__.py": {
           "kind": "tool",
-          "sha256": "84bb34c2442c2fd83a0db916660512e8490b781bd6525acb10d18d582c4d6042"
-        },
-        "src/agent/geometry/adjacency.py": {
-          "kind": "tool",
-          "sha256": "76c9c0b77612819540bcb27985844b75980ff143aa6d56712a8be2ce9b81463d"
+          "sha256": "5505d531e66b87a5aa20f3e0f0320a72e64d390af60d4356d1bbf69f87e7a0da"
         },
         "src/agent/geometry/architectural_incidence.py": {
           "kind": "tool",
@@ -360,27 +204,23 @@
         },
         "src/agent/geometry/architectural_line_paths.py": {
           "kind": "tool",
-          "sha256": "1d11a5586c3924c252578a79df8bbab4f4134567017c0a6f2cb9069698dc9107"
+          "sha256": "8d901161fcc3ba9ef9ecfb5fa39489c195520cb54097fff2c47dd65225d02039"
         },
         "src/agent/geometry/architectural_regularization.py": {
           "kind": "tool",
-          "sha256": "c0bb30a2a13efe9e313b1fbf3e0068963d8650606fbf78dcd0ecc188e4d40c47"
+          "sha256": "2ba086927166057f890ba3a3cb68f5aa459f42f66fd372b3c96fd52824c6fa63"
         },
         "src/agent/geometry/bim_delivery.py": {
           "kind": "tool",
-          "sha256": "69a234f925d79a1f85eca99fb1f109bfaa89cb41f3453ee1f4bed93c11de82f4"
-        },
-        "src/agent/geometry/build.py": {
-          "kind": "tool",
-          "sha256": "c9e00cf4dee40c71947510b2623496a30f8e656fc38cea45ca17793ee06f9e0d"
+          "sha256": "692fe60ecf7e4e7c18fd938cf10a5a4fe1752789b381f48d05b67453eeda58a3"
         },
         "src/agent/geometry/building_precision.py": {
           "kind": "tool",
-          "sha256": "f4711ea638659e74118913f418b1388f73931c48d2cb353c77029db6216f86cd"
+          "sha256": "06a9ea85618d2061d3d9edcafeaee76a3bd7bb3c7804d219f62b6a91a93fe6fe"
         },
         "src/agent/geometry/capability.py": {
           "kind": "tool",
-          "sha256": "10afdaf0388165b196d1a9de0d367a79afad529cc639b0b5e6964611ee9fab6d"
+          "sha256": "1e640a9e6b3d8e7c9507384c54dbacb1222ea8d855b969a8a3c93d822ccc48d8"
         },
         "src/agent/geometry/component_attributes.py": {
           "kind": "tool",
@@ -394,17 +234,21 @@
           "kind": "tool",
           "sha256": "07c737be9b3077aa7386480ab37219439673047e91581e31254f2620101d48c2"
         },
+        "src/agent/geometry/image_calibration.py": {
+          "kind": "tool",
+          "sha256": "bedda830ee0f26a1d41fab2d7c714919a122950fa157c542d337df80bb8ec632"
+        },
         "src/agent/geometry/input_scale.py": {
           "kind": "tool",
           "sha256": "90872f5b0cfe2994e5dc5a8b164b3425dbe417206e1e78bd89d20f93c51866cc"
         },
         "src/agent/geometry/lite_bim_regularization.py": {
           "kind": "tool",
-          "sha256": "c8247ccaf06f437e8e7eddaab8379ccba8144e1c66ffd207712ed0030252d2e1"
+          "sha256": "fc98142a861365460ad54e67d9ac7faace63c3a96ce2f63d3b7d1dac790f998c"
         },
         "src/agent/geometry/mesh_bim_frame.py": {
           "kind": "tool",
-          "sha256": "5e36919e45a06d1506f36fa1a3b0dcdd85d77c458fc528f3d08788a4c735742a"
+          "sha256": "b5e88100ba17af41240b662313066c137be3facd78003dedbd1bf48d17d2901b"
         },
         "src/agent/geometry/mesh_correspondence.py": {
           "kind": "tool",
@@ -412,35 +256,31 @@
         },
         "src/agent/geometry/mesh_observation.py": {
           "kind": "tool",
-          "sha256": "98778741888d5f570373e2454e53675ceee81bde255cf7aa7d8c86fbc556d791"
+          "sha256": "653df92caf407dd3f868ddf3ff84d3f39c2d84ee9fc8e099523676bba5b726c5"
         },
         "src/agent/geometry/mesh_section.py": {
           "kind": "tool",
           "sha256": "fbb78d2cbf304a84fa04e506843ccf26977c08418ef3999d77b9e8f429561039"
         },
-        "src/agent/geometry/modelling.py": {
-          "kind": "tool",
-          "sha256": "26c15d5605181275046b1d39d6e6d38b89d12efb1d156b8d1cfac742ae98a670"
-        },
         "src/agent/geometry/opening_review.py": {
           "kind": "tool",
-          "sha256": "ff5cb2d9f822a21e12a3b7b45a61141c6f497816affd07230c84f4d6464b821f"
+          "sha256": "f3e1045ac52f5462b4f66a20539ee576d41ea77cb1a3fa01b0f07d64c934d04d"
         },
         "src/agent/geometry/opening_segments.py": {
           "kind": "tool",
-          "sha256": "04baa6918f47161def8b5c0e36740328b50ccb97eb2b20f0c257f2141f7aa48c"
+          "sha256": "3615e79f35538fa82d08d3e4b6d932d7e2b08a92e196110e0bd133d2666adfd7"
         },
         "src/agent/geometry/openings.py": {
           "kind": "tool",
-          "sha256": "24bae1faff0c197ec51ecf3b37586957563b70ed7855b3b60ac880a82b5087b7"
+          "sha256": "dd77a2b1558e29c6d3328cc1d3d5434aa1da3e0760e7a3c6f4be94da306ef288"
         },
         "src/agent/geometry/parametric_continuity.py": {
           "kind": "tool",
-          "sha256": "43cd8c168bbaecb89edea0145becece6650c4e73320b83e9a3c494d47b0e4f3a"
+          "sha256": "39b2593c080d23345db1bdbd37077afd00d3cc2e5dfb31bafa6e952ebbd3e4bd"
         },
         "src/agent/geometry/parametric_primitives.py": {
           "kind": "tool",
-          "sha256": "7583fca9608d6bb212d6c90f6e62bd31f3d9de02a6808211917ae05615b14233"
+          "sha256": "5ff2dbc6c03c18995224fcd03b46a3239968514605180fdffa9d3edf4822c0d9"
         },
         "src/agent/geometry/parametric_proposal.py": {
           "kind": "tool",
@@ -448,7 +288,7 @@
         },
         "src/agent/geometry/parametric_validation.py": {
           "kind": "tool",
-          "sha256": "62f256bed50a78f0a0c429be4c2254807a29a30cd794424bd2a93504bfaca215"
+          "sha256": "5985dafa94a99c08b62483abe69f59c4a07c143d4ce64672d4a511ed7239045b"
         },
         "src/agent/geometry/pixel_region.py": {
           "kind": "tool",
@@ -458,13 +298,17 @@
           "kind": "tool",
           "sha256": "bf47a8b3cf676e47839e2751dfb056c617195a452ce3565c0614ac330c9e9ab4"
         },
+        "src/agent/geometry/plan_alignment.py": {
+          "kind": "tool",
+          "sha256": "db82de6799952db118a8a44865cd4d69c2a75fdedf9568f1c0bebb0b2b50ac16"
+        },
         "src/agent/geometry/plan_assembly.py": {
           "kind": "tool",
           "sha256": "95a4d4fa6b5e3c1a33e825194d71f4639fe04c4fcf9062a39a65cdec44717085"
         },
         "src/agent/geometry/plan_dimension_alignment.py": {
           "kind": "tool",
-          "sha256": "e141db3bb2dd1e133de7da457e4879c80047a0f0be1c775b96b5bb0f0303d459"
+          "sha256": "9d14de3bda2f40082530e00241434c185c67e67be8cce9a4311e6c889abf2907"
         },
         "src/agent/geometry/plan_draft_view.py": {
           "kind": "tool",
@@ -472,15 +316,11 @@
         },
         "src/agent/geometry/plan_drawing_differences.py": {
           "kind": "tool",
-          "sha256": "7131650cc471db32acf8827ae15ec7b4e835b33eb278cbef2715cc87a072c016"
+          "sha256": "b1e91f9e22254acc69fb83790694635134dcd235b6c106b52e81b9aee9a37782"
         },
         "src/agent/geometry/plan_feedback.py": {
           "kind": "tool",
           "sha256": "d07012f40f7cf6cb9cb54ae41b3dd5674298ae9870b3f0bc41a6c1feec17957d"
-        },
-        "src/agent/geometry/plan_ink_alignment.py": {
-          "kind": "tool",
-          "sha256": "1ec0775a5999d416e05f60c3e9e76da5146cac4d86aea2358001eed59b4f7c09"
         },
         "src/agent/geometry/plan_input.py": {
           "kind": "tool",
@@ -488,11 +328,11 @@
         },
         "src/agent/geometry/plan_partition.py": {
           "kind": "tool",
-          "sha256": "1d44b56771824188877e4118cf1a9d745ea0f26422d676401f50960c4fe0b474"
+          "sha256": "0a02756ee354c11056af0fd12c08720d1db99c00c5ffed547f7d88695470d233"
         },
         "src/agent/geometry/plan_regularization.py": {
           "kind": "tool",
-          "sha256": "b5b989984af7a03904d6c933be14f1b66934396699b4efc00603c45212a97844"
+          "sha256": "a8185cc2586322e45f080c7f928963f940c02cc7d58e94bee4bca29c2f74d34e"
         },
         "src/agent/geometry/plan_revision.py": {
           "kind": "tool",
@@ -512,27 +352,23 @@
         },
         "src/agent/geometry/profile_observation_binding.py": {
           "kind": "tool",
-          "sha256": "cbb02779a25acc243199922f71575db7d28c7d03e4c82b808992ad530ac68296"
+          "sha256": "6a47dca182dececed3761b6461113fc80795b95eec97a39de112fe2c1058f74b"
         },
         "src/agent/geometry/proposal_edits.py": {
           "kind": "tool",
-          "sha256": "039114dff9413fdf3220c12b1d1e72d0203bb9133ccdad3088dc9fe363ebdcca"
+          "sha256": "39beb59624ccfa1cac7d9f9c55c342cc28c496fe08f9dc1d8d87e59fa6f30b18"
         },
         "src/agent/geometry/reader_wall_metadata.py": {
           "kind": "tool",
-          "sha256": "42de9c80806fd924481cfe51e2b0107de8f09f0a39f0c9bf43dad92916ec5723"
+          "sha256": "4ce23f78d47a8a6e809f82f31d1f23f506e7a92dbfbe173490ecd43cf96262c8"
         },
         "src/agent/geometry/ring_failure_diagnostics.py": {
           "kind": "tool",
           "sha256": "ddcd2c1cd31f241a14a6eb11b0e81141012d800e12a1d11cf7dc2e30a1542c3b"
         },
-        "src/agent/geometry/ring_order.py": {
-          "kind": "tool",
-          "sha256": "6c442a5c605208d5965e19d56ad6d6166a66cece564d451f1b1968106a98b995"
-        },
         "src/agent/geometry/source_bim.py": {
           "kind": "tool",
-          "sha256": "1d57c2f90a34966bd50f98d9a41d0f9262323fd198fc6859372ccaadc3f74d56"
+          "sha256": "925375c1486f82dfab2a451540c9bb21a2034d167b12366e0f09bd87e2f51049"
         },
         "src/agent/geometry/source_curves.py": {
           "kind": "tool",
@@ -548,7 +384,7 @@
         },
         "src/agent/geometry/source_enclosure.py": {
           "kind": "tool",
-          "sha256": "0801168f1a969896c7435640b8ad04e4f43e637b589146ef07deb1ab69b7a39d"
+          "sha256": "bb72c96f191d18d673db0fe04ece836ab71165854cda319ab64f18d78898354f"
         },
         "src/agent/geometry/source_enclosure_intent.py": {
           "kind": "tool",
@@ -560,23 +396,19 @@
         },
         "src/agent/geometry/source_image_overlay.py": {
           "kind": "tool",
-          "sha256": "0e9b862147203a431585710cb36fcc382c60c08c2bb567d1a2674d5402e4cac7"
+          "sha256": "7c5ff64c9716484b7816827c9ad86c5899dc843cb9707f58255fb8ab20a7f911"
         },
         "src/agent/geometry/source_model.py": {
           "kind": "tool",
-          "sha256": "b14510ba6e2fca10919aaf5eb1eca41b33c86370e8aebd4a737e60050f17c0bc"
+          "sha256": "25652481e3501c1fced6c53953e19b24249f592e9babe126c3adc25607470aaa"
         },
         "src/agent/geometry/source_naming.py": {
           "kind": "tool",
-          "sha256": "bcf4340e0116a4e2bd80e82f92ee6b38a1a11bc6c3da266694fc8282267cec78"
+          "sha256": "82fb4ce8fade1222e6283bb4ebd753f81941372157cc7341d3c7f0f670e7e3c7"
         },
         "src/agent/geometry/source_plan_view.py": {
           "kind": "tool",
           "sha256": "4736b27ec80ab4ebb3daa0cc7a7b7fa2baa0d947319a0d952e79cbc9a0005c0f"
-        },
-        "src/agent/geometry/source_schema.py": {
-          "kind": "tool",
-          "sha256": "9046034d654c922c6c0083a7237f39b8033e9280ff02b0b6f1dc825702e647f2"
         },
         "src/agent/geometry/source_space_relations.py": {
           "kind": "tool",
@@ -584,7 +416,7 @@
         },
         "src/agent/geometry/source_vertical_continuity.py": {
           "kind": "tool",
-          "sha256": "1916f7f72e90932fed7ae48b6a377027f4dfeec7bebed257f0c4024954efce00"
+          "sha256": "a8f86263ae45aa71e71578bb8cc04c7199a9d8c7b327a105b054f09ccb45d8ef"
         },
         "src/agent/geometry/source_visibility.py": {
           "kind": "tool",
@@ -592,23 +424,15 @@
         },
         "src/agent/geometry/source_volume.py": {
           "kind": "tool",
-          "sha256": "61cc061ffb5edc8710ef832bb2355ff701b6bf974845ccffb5d7b7f6b0d46833"
+          "sha256": "17d12539d3522ac1ab34ce034baa8f7ba2e9bfa2e0404490840bd59d4e2713f0"
         },
-        "src/agent/geometry/space_trace.py": {
+        "src/agent/geometry/surfaces.py": {
           "kind": "tool",
-          "sha256": "b0cfe691d9d4f72411052b8aa618890a5a5727fa6d5cff660c99174a5755dbdd"
-        },
-        "src/agent/geometry/specs.py": {
-          "kind": "tool",
-          "sha256": "47cbcb8a648e647c0c18f601a998b04e21e715f19b1764a54d606b30ec1beef1"
-        },
-        "src/agent/geometry/split_pairing.py": {
-          "kind": "tool",
-          "sha256": "27491a952c586c7bba453535c8b110831db304fc7c2898360816146ee49d0f96"
+          "sha256": "96f9b4ebdee2323ffcaa9c8fa9de77bdec88d1db94196907a6a50ce31e94d20a"
         },
         "src/agent/geometry/wall_merge_policy.py": {
           "kind": "tool",
-          "sha256": "d94690600bb83a5fd50f4e81ac8580560b8e3f946b07f91566ab8ecdb0752d4a"
+          "sha256": "bfc6b97b7d1a47bb320d89effa059a28a837cced9b6d59505d64e37de322ea04"
         },
         "src/agent/geometry/wall_placement.py": {
           "kind": "tool",
@@ -618,109 +442,77 @@
           "kind": "tool",
           "sha256": "d9e8d5cf947d8d7aa869f205857e81b41bfc185b8ebc315c83a89196526e06f5"
         },
+        "src/agent/geometry_model/__init__.py": {
+          "kind": "tool",
+          "sha256": "c36bdca04167a84fb1979da5822517851866022a36d9d94a3c2f1ea5b7cfcc09"
+        },
+        "src/agent/geometry_model/cells.py": {
+          "kind": "tool",
+          "sha256": "9300234e4b131f272db0c72195badcebe34b2b581532027e19adf117b30c0313"
+        },
+        "src/agent/geometry_model/config.py": {
+          "kind": "tool",
+          "sha256": "b5ea98f4acc95865f1091a64f908105d177b150d9dd06448539558153e7be491"
+        },
+        "src/agent/geometry_model/constants.py": {
+          "kind": "tool",
+          "sha256": "49cf4f610c32e249ce33cfb834fbe3974ff1c9ed1400e06b856bbeba0b1b8781"
+        },
+        "src/agent/geometry_model/orthogonality.py": {
+          "kind": "tool",
+          "sha256": "2a6fc4dfb75cf6375e448e5ccb6973efaa6987928d320813fe455a31d0c49bf2"
+        },
+        "src/agent/geometry_model/parse.py": {
+          "kind": "tool",
+          "sha256": "6ada31282427f25881558079112ac6f24964b6122c979d5673d901028a4b3a96"
+        },
+        "src/agent/geometry_model/schema.py": {
+          "kind": "tool",
+          "sha256": "f8132d703ea0362214b947c141890e00e34d6c915b9c85f9a2dfcd58ede47fd7"
+        },
+        "src/agent/geometry_model/source_polygon.py": {
+          "kind": "tool",
+          "sha256": "be818c7fcffb317921e6c642f597fa17d5e52771fd74446922dbe8c0f56edd08"
+        },
         "src/agent/input_image_view.py": {
           "kind": "tool",
-          "sha256": "709a02d955a8bc6aebde40ee7ff00d54c67338f4c70935e512c9be944adc4087"
+          "sha256": "f95fb505be69bb8a595c9b3e10b33c7548e24c2d8ed24f9b17bbf7bb66f0bc06"
         },
         "src/agent/product_cli.py": {
           "kind": "tool",
-          "sha256": "8817ece71bc1b2e24f9276117e990bc7ff21d5190e40d965bb741f7760b8e50d"
-        },
-        "src/agent/reading/__init__.py": {
-          "kind": "tool",
-          "sha256": "b9bbb3b15aafb2d2e53e037819615eca7cb307c64b61b2c54836d9ffbf788f5c"
-        },
-        "src/agent/reading/as_drawn/__init__.py": {
-          "kind": "tool",
-          "sha256": "583b6a12a278858d7e31838ab85f159aa29e14ddf05f212570d62ebaa7767cea"
-        },
-        "src/agent/reading/as_drawn/_plan_ink.py": {
-          "kind": "tool",
-          "sha256": "922c7db32ca15791c27c1767d1182b19bb7bc69960e7ad86ba824a12b35848b6"
-        },
-        "src/agent/reading/as_drawn/as_drawn_v2.py": {
-          "kind": "tool",
-          "sha256": "1ce18bdeeebeb65620e3c302368f8ea5aa2dcef6b15d9641661edfecd7583b67"
-        },
-        "src/agent/reading/as_drawn/pens.py": {
-          "kind": "tool",
-          "sha256": "8758c2e03b6d833dabf0bf25c9d5eb25ec26127e5a08604193f245fa8e19c12f"
-        },
-        "src/agent/reading/as_drawn/schema.py": {
-          "kind": "tool",
-          "sha256": "988ae363553a2c6fd02d33f81366a3c2e3a2aac6817d0973ebbcd0ae1067dbf5"
-        },
-        "src/agent/reading/constants.py": {
-          "kind": "tool",
-          "sha256": "c9728362918a2000c62db490388fffd89ed8ea09ca89e33154baec7e4e3a63f2"
-        },
-        "src/agent/reading/contract.py": {
-          "kind": "tool",
-          "sha256": "f9bdc1ddd5cf6ad411de57f52ff911bda8615152867a4e3cac3b12f4cb1f7189"
-        },
-        "src/agent/reading/cv_toolbox/__init__.py": {
-          "kind": "tool",
-          "sha256": "d3075be4880275e85b71e66be3bbe1c8f1f609dcbc53c61a438e7dfc75f50e40"
-        },
-        "src/agent/reading/cv_toolbox/recipes.py": {
-          "kind": "tool",
-          "sha256": "43813021841cbf41bc4abf0767fab9d722b24298f75a3d54936745c1db332aa4"
-        },
-        "src/agent/reading/cv_toolbox/sidecar.py": {
-          "kind": "tool",
-          "sha256": "873774733f9f8f115fbe91cbe60529da5cf7b31a4c9e46953904bbd0ca0de5c9"
-        },
-        "src/agent/reading/cv_toolbox/tools.py": {
-          "kind": "tool",
-          "sha256": "faf526a7ec73632d2a90eb9c45b4f832290a254d2196490ff69fff83712d849b"
-        },
-        "src/agent/reading/legacy.py": {
-          "kind": "tool",
-          "sha256": "13d065884932e5f073c1e7fb2beb152a050140359352f99d966f34ba17e8e496"
-        },
-        "src/agent/reading/schema.py": {
-          "kind": "tool",
-          "sha256": "33927b041cd0aba4e614b2874efe5e6d62dae6a8b6e75dea2079255fe4539725"
-        },
-        "src/agent/reading/vector_contract.py": {
-          "kind": "tool",
-          "sha256": "7bae5d15e4bbda4ffe287f5da265daa0006c7da23d60b037da8b24116112df0b"
+          "sha256": "a91e52fd282dd67d2d06cd4bb088c3b1b6815c162cfc54dfc1ac5cb5e0a955ab"
         },
         "src/agent/roles.py": {
           "kind": "tool",
-          "sha256": "45b3fffd6fa7dbc5e4c0f28e79c82433b5d087d2aa00984b3de8f3daefa66534"
+          "sha256": "e70d2607e8c227bc3e0cd071fab077e5ec3a5ecc3423130f2b6f765f3b33d57d"
         },
         "src/agent/runtime_behaviour.py": {
           "kind": "tool",
-          "sha256": "49bcfde599066185e699257d5cc1862a6f97e0de748e1bbb99411d5716811ad1"
+          "sha256": "9403a91ebe14df827dfeb95c6aefbfc6730cc4db9ac485e4f379da7783f0c8fa"
         },
         "src/agent/runtime_configuration.py": {
           "kind": "tool",
-          "sha256": "324d3051d768cbd2497ea15b304cc4eea848145b30a769e7a7ea515c071c5df8"
+          "sha256": "28703cda4e1301661002de4240840697ba18ed1a5fef3a3d2f24675ac4c55c9f"
         },
         "src/agent/runtime_context.py": {
           "kind": "tool",
-          "sha256": "0ee3120fa2c862ba565e832612979c1adeca4dce3d39d8dda8be1b1e7062154b"
-        },
-        "src/agent/runtime_delegation.py": {
-          "kind": "tool",
-          "sha256": "3a050b3d5fcf2847dc289580ab768eecf35f767a94be90cce82e6b4633504687"
+          "sha256": "bf5e1b7b37c5fe6f0f1115ae83aefab89021537db2b577f4cad5aa6ff52f867f"
         },
         "src/agent/runtime_delivery.py": {
           "kind": "tool",
-          "sha256": "4c9ba1e344589ced51e0bd70314f3c653e3f2313bd919e0f6e12e9ea30054538"
+          "sha256": "e2a5553db6ee34f2f70a836ab3a18f6f2f20c673bae38c5901157df1684796e0"
         },
         "src/agent/runtime_entry.py": {
           "kind": "tool",
-          "sha256": "28a77375b270aee980883592cce317bcf8a50e7d50041bfbb84bfddce99ae03f"
+          "sha256": "0c26db7670557faa6f5266e398a6737f2547a96be953b291d24fb07d854200be"
         },
         "src/agent/runtime_mesh_continuation.py": {
           "kind": "tool",
-          "sha256": "85d815e683227fdb5e4fbbc86832cee2e878e684cb747218353ee2675a12bba4"
+          "sha256": "379c05270153cc8d9e019f6db6e81845a3daffbd2ff16011b390a5fb236a8bb8"
         },
         "src/agent/runtime_mesh_evidence.py": {
           "kind": "tool",
-          "sha256": "932127b7fa73bfc6fd30217190006aed628a68f060bc8f413f2acbcab2cf611e"
+          "sha256": "7d011281b61c8ff136a7c5b3ecd13fee0f248ea531c5c111f61a383e06f3acb6"
         },
         "src/agent/runtime_mesh_image_views.py": {
           "kind": "tool",
@@ -728,7 +520,7 @@
         },
         "src/agent/runtime_mesh_workers.py": {
           "kind": "tool",
-          "sha256": "6d7a32251a7409ca86e999a25ecd220be43a7ca57e35b5bc80a4cfe867e9b433"
+          "sha256": "8d4b06a9d0699b54b91a592394ecb41ee932fcb69155e6617a64ada2de2a3092"
         },
         "src/agent/runtime_roles/__init__.py": {
           "kind": "tool",
@@ -748,7 +540,7 @@
         },
         "src/agent/runtime_roles/assembly_review.py": {
           "kind": "tool",
-          "sha256": "d884a42158126f2d2eb1cec5356fcd6747c06903a0dc301d2579a13435c30034"
+          "sha256": "69851206f5b33af9caefeb8305935f016904c571878c922ee42a76bb91caf48c"
         },
         "src/agent/runtime_roles/building_review.py": {
           "kind": "tool",
@@ -756,15 +548,15 @@
         },
         "src/agent/runtime_roles/config.py": {
           "kind": "tool",
-          "sha256": "92c23410057a468cc509fcb7be41b9e938dd01fb585b8c870b23d8660313df6b"
+          "sha256": "dab2443866f4fee92951848aa3c0744de0755a6d4929b876e64bfbef0f6c897a"
         },
         "src/agent/runtime_roles/context_policy.py": {
           "kind": "tool",
-          "sha256": "56d060eef446be6991a6e2aa219b53e495a6aab2b7376f0d97264881a858d00b"
+          "sha256": "02c6e0f0bc0a952ca3fe1b3398eb615ea54c3b0fa11c9a0d921e01946c4f502a"
         },
         "src/agent/runtime_roles/continuation.py": {
           "kind": "tool",
-          "sha256": "2f00e818acb0028baeb4f74d8d04ae26a7eca94c3fed24cd4bcb69837058a68a"
+          "sha256": "943c9d5e70c98efb27dcfc589830a1c4afd5514ed5eee72d81904867a297dd0a"
         },
         "src/agent/runtime_roles/coordinates.py": {
           "kind": "tool",
@@ -772,11 +564,11 @@
         },
         "src/agent/runtime_roles/elevation.py": {
           "kind": "tool",
-          "sha256": "5f042ac41c330471c8144a8a670853c1bee213402cdc1b8dfcdd2dbe8ccd2f8f"
+          "sha256": "9dc4b3133e8723496c7f7237caa14a0125b416478c52dedd0ef739bd7820a9e1"
         },
         "src/agent/runtime_roles/elevation_ink.py": {
           "kind": "tool",
-          "sha256": "034a593c93802bb0d0707ea4f03bf722f769fbd716b0fe0ce96dbeaee2eb956c"
+          "sha256": "1ac17d72019feddc89a5de9ee3bb1587ce37e8f30cc516a79fa0ab8b4e803b51"
         },
         "src/agent/runtime_roles/elevation_regularization.py": {
           "kind": "tool",
@@ -792,7 +584,7 @@
         },
         "src/agent/runtime_roles/entry.py": {
           "kind": "tool",
-          "sha256": "f90bc10d219c6ab111f6a43fd0b09e47123ceaedfd50f472c4b7931abd13fe20"
+          "sha256": "f374e6be40123df59155d06952141de6049c5fcccea9aea8a3e53ff6c986f19a"
         },
         "src/agent/runtime_roles/feedback.py": {
           "kind": "tool",
@@ -804,15 +596,15 @@
         },
         "src/agent/runtime_roles/height_evidence.py": {
           "kind": "tool",
-          "sha256": "d01647f292be1d572438fd9f088ce41c4dbe1d936203adec0503a806f362f000"
+          "sha256": "d45729bf66123de38e17faf2fc7f6188451fc6b37efab050491dddeefb0871e6"
         },
         "src/agent/runtime_roles/height_writes.py": {
           "kind": "tool",
-          "sha256": "80d0c1f832791f9e98e97b0e081f2ad9358485d97f2669a527c57a96c7d30ab5"
+          "sha256": "e5ce7bec335d71a0abae8814faa229fd0097ed0c16c2d82293c426d0e6ccfe86"
         },
         "src/agent/runtime_roles/levels.py": {
           "kind": "tool",
-          "sha256": "faba0ab3bb652b9a58172abe454bdbd5ed474d3da85055f6fb9aa72f050c0aa3"
+          "sha256": "f8e33981424f2ddd0929f8fb776a25570eec22606588fdf28bc5acc75476a01b"
         },
         "src/agent/runtime_roles/lineage.py": {
           "kind": "tool",
@@ -828,19 +620,19 @@
         },
         "src/agent/runtime_roles/plan_format.py": {
           "kind": "tool",
-          "sha256": "ef04ab490cbbe0a84619a715b1ac5ea66246a227b814b883fdb4594faee94a83"
+          "sha256": "d35b2aa60ac55b49b5084af0b15141e3b19c0ab77e5e5db21a4305aa71877870"
         },
         "src/agent/runtime_roles/plan_materialization.py": {
           "kind": "tool",
-          "sha256": "d945f69e0475f24e7d995b58adf1382f0b9bc83a2b183bce1bdd803faf72c30f"
+          "sha256": "519bb4e7b54b365b54dff5d27b059fd8264773cc1ffb53f65781e3f2ba765cea"
         },
         "src/agent/runtime_roles/plan_reading.py": {
           "kind": "tool",
-          "sha256": "c3dc9d9ebc9f093cf9c0b9b504e2f7721e78eeeed80b0ad9e5307805b77f64ef"
+          "sha256": "b483ae91c7a23ab49e41f1990dbd32c58a4960d5a5d0a33ad95eada4caa1fa2c"
         },
         "src/agent/runtime_roles/plan_review.py": {
           "kind": "tool",
-          "sha256": "ff1a3ab90ed136879a1626b1edf398c6dec6cc28f4093d79a347d40369024870"
+          "sha256": "12fe732c6c745b48d07213978238c110ff58876aa259ec0ba64b993c212e7e9f"
         },
         "src/agent/runtime_roles/plan_views.py": {
           "kind": "tool",
@@ -856,19 +648,19 @@
         },
         "src/agent/runtime_roles/readers.py": {
           "kind": "tool",
-          "sha256": "85a6d18a98ef9b0850faac797d9f1677fa4cb1f5a6c782a20a6a28fda926b6e8"
+          "sha256": "6ce7ff96b26d7a5b27a4c41c3e7b0dda2a856a845dc5100255415d2cdb5b15f7"
         },
         "src/agent/runtime_roles/session.py": {
           "kind": "tool",
-          "sha256": "d2b86dfd3666396e7a64991523d287bcf0e6519535c0592491b47ef2b7093eac"
+          "sha256": "3ec6451fda62593a11537f1595680dae87cb9b2d757fec6944bcd5965d770e33"
         },
         "src/agent/runtime_roles/submission.py": {
           "kind": "tool",
-          "sha256": "d7b68a4b5c28ac3df84a0c5a521f3490d9601acbb7e572faa9ef55474a8906b6"
+          "sha256": "4b6e9b428e64a8f88fabeab19d00918c417a53b2b7c2eb770d95c40d1437709c"
         },
         "src/agent/runtime_roles/trial.py": {
           "kind": "tool",
-          "sha256": "1921b533ad93a0bb82b55815c6c0fecffda4946fd72ff95bea99f0fcff920ae2"
+          "sha256": "bc53aa55e6319371ecee942d34b93141ab3d8f39aa5412f94f7911c86f18c644"
         },
         "src/agent/runtime_roles/trial_feedback.py": {
           "kind": "tool",
@@ -876,40 +668,32 @@
         },
         "src/agent/runtime_tools.py": {
           "kind": "tool",
-          "sha256": "20e87549bb47db3d0d75612c19efcaeb36361b4467e67ac869e4639720c000ab"
+          "sha256": "6484cb4c3c637b245ce9bef6a31b792c3e5319fba0ace21dbb76d2acf7cbb216"
+        },
+        "src/agent/runtime_worker_budget.py": {
+          "kind": "tool",
+          "sha256": "883f18ad417ea86395cec0ea4d59d88513f6bbc000ee4b1b92eeb54de6419a5b"
         },
         "src/agent/version_fingerprints.py": {
           "kind": "tool",
-          "sha256": "7052f4ffa8202592b3193872886bd51279854d69a586d21dac82f1f3bad6ad07"
+          "sha256": "9b7c39785c52a89159b58ab1a7535093c7b85da2cef2cf93ef618369953c7a7a"
         },
-        "src/configs/correction.yaml": {
+        "src/configs/geometry.yaml": {
           "kind": "tool",
-          "sha256": "ad3aeeb910ebe41adcd23ed7501df90909bdc29fbb758ff24a2ccebdf7c24402"
-        },
-        "src/validator/__init__.py": {
-          "kind": "tool",
-          "sha256": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
-        },
-        "src/validator/checks/__init__.py": {
-          "kind": "tool",
-          "sha256": "a396efa46559c58e9f12277bfb98d35da9ee16c54a2f2e6ee4a1e6e89ab1e89f"
-        },
-        "src/validator/checks/schema.py": {
-          "kind": "tool",
-          "sha256": "3951684111d0017e55d50eded4eae0d610f601e7f6de5c30a4b7c0317428902f"
+          "sha256": "e0306675fda8a1315eaa4cf835e54f541e06a32505c85378c28c5689a731da63"
         }
       },
       "mode_fingerprints": {
         "mesh_workers/coordinator": {
-          "guidance_sha256": "cbb1e308b3182ed9dc762e766c7ca2d2e5f97eeab47321c28eb66315caed3b0e",
-          "sha256": "1424a5e8ce444b2d841c7279b0ff701fe6a497b0b76cfc9b2c17749ecf2cd038",
-          "task_template_sha256": "3bbe1967c9e1623033170e082618c71e2ba89170540e2b0f7e1e623259b62972",
-          "tools_sha256": "11fd3a211f781f5772d57bf4044b92c9953f7d4bdeaa0dd1f5c30bb6e7e00810"
+          "guidance_sha256": "30412c90ddc012d5778910ee6da0a836ac913cb41304f74c4196c738a9d8a0ae",
+          "sha256": "445f9a466ff7f3bb459b3ae510c6c6ab9d6fe56d3466ee44a83db83da74badf0",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "06c0e6358c4d89a9e04cc2ee71d259352f1ccfd1c838e00da24e1500de89f3fd"
         },
         "mesh_workers/observer": {
           "guidance_sha256": "647868a3211f743d06abf1180d51424adac71075051c370a37366a4e77f7165d",
-          "sha256": "c26f57fbf5343d53c1e0128f45fb44fc77096d287843b57c31cf802b07dba3d8",
-          "task_template_sha256": "a7218c5cb1a81ed9b101f9216522f64f7b5553750432193eb62878f8ff637776",
+          "sha256": "c382d94d2e0ee4416de849c9b558663b4cc43cd806eac7ddb83140f02a4d6bae",
+          "task_template_sha256": "edd745ad0c0f62d8e54ba2791fb5bad82a5c5459edb337f436299d4fca27353a",
           "tools_sha256": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
         },
         "role_division/coordinator": {
@@ -920,62 +704,61 @@
         },
         "role_division/elevation_reader": {
           "guidance_sha256": "e43bd5934864be2abe14298a88b3a9c7049222e3da7a3bebb86077df144d5502",
-          "sha256": "b2c6c6e86265bf28085762cea7e690a50a9846b21a849bec1fa3a0ad44080e6a",
+          "sha256": "dd31fd102d70aeb0411bd47297acfb8f49f5352e5f50c8ff314b9d2df16423fd",
           "task_template_sha256": "05ba17ea364aab7166ec2497391ebc45777fddd4ef8bd91dd1fcbc12a218dd14",
-          "tools_sha256": "74a1277ad47c6ee40c762a5b37c3454b7656253c3fe1efdd068c32bcc40a7f07"
+          "tools_sha256": "e1575d98562ec36c449e06f73aa155bde2e753a7f0bf1b1de8927171345f538e"
         },
         "role_division/plan_reader": {
           "guidance_sha256": "644b73bb3db4a75e19415b99dc8a3d035c0457062f7684362811780ec6f5f648",
-          "sha256": "765745f2a4146b503a6777ac499004e47c9125a42580827bd93988b89e307538",
+          "sha256": "6732873c71fbedffd5324119e5b06552b5db0d51a02d3c3e6b589a9abd174cfa",
           "task_template_sha256": "12e2b839d761b2baf0f2c209255bc79aaf17b9222b778c86e2d402f5f3f5a009",
-          "tools_sha256": "64aae0b37a24caf8077be6bcb8dc307f955a88ad488eec16de8f732c4efb5674"
+          "tools_sha256": "24b30b0fd5621c264c77881a4801f367c5c95ecc109166070f34bb77a37a36c4"
         },
         "single_model/coordinator": {
-          "guidance_sha256": "fdc0cef123c190c6d55fd2b6374a59ee7ce968af546e6591dbaf18a1577c61f7",
-          "sha256": "4159bea38e9bb8e64aa62117b1ad9c131e6f9d60e7034fc935d985ab2cbcd916",
-          "task_template_sha256": "3bbe1967c9e1623033170e082618c71e2ba89170540e2b0f7e1e623259b62972",
-          "tools_sha256": "8d3e0b9757b12a035e16d43615181f58b6aee201ef777aa748a57eea4f79cdcb"
+          "guidance_sha256": "486c8dbb410b3f41958b284cc5f41a3a64f0956e87ff24d01cd4f76d1a03f9a1",
+          "sha256": "fdeb96d8fceb82a69ef45dbd310989564d85e54f7d7b3e31b78b47db9ba627f8",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "4d6d405f333992101ff8c8fc3ac0a8c5a3e6217bfb9ce6f694e155a143e0f31f"
         },
         "single_model/coordinator_mesh": {
-          "guidance_sha256": "36a9eac6a0dc45d0877393f65ac7b9db3dfdbde1d18c6bd993fabd1150fc19c5",
-          "sha256": "68bbc5d671b4893ec277f0d594788b7cc09a94dc9cc81bab5be3cef803ec2f1c",
-          "task_template_sha256": "3bbe1967c9e1623033170e082618c71e2ba89170540e2b0f7e1e623259b62972",
-          "tools_sha256": "c8c9e5f6babca5dab0f595257e45663add13c7f7d277361b8ded87fbab8ec37f"
+          "guidance_sha256": "68efca87cd639d04501b4d3f14eaf92d2f4dec392fd111374709e26058a66384",
+          "sha256": "436002e229e2d5b42787aae7d6d5ef8879c9c54fe3843c25857bca15addbe2c0",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "bb6f39c2ce8d6ca6734e2aeaec52ed4afca282b6395c12dd58fb6e300974f2ee"
         },
         "single_model/readonly": {
-          "guidance_sha256": "3bfe98065069745b8efecda12738d7da8a34caed85a8edd180af4d8e697ee60e",
-          "sha256": "98920ee9047b3ced45eca95bcf7321b29bdb10f8bcd2a999869bb2b99c6a49fd",
-          "task_template_sha256": "3bbe1967c9e1623033170e082618c71e2ba89170540e2b0f7e1e623259b62972",
-          "tools_sha256": "6cb72087ed6ce659552a299c0e51f3f2a4cd189e38b6e1bb7a218cd5aa5cc1e6"
+          "guidance_sha256": "486c8dbb410b3f41958b284cc5f41a3a64f0956e87ff24d01cd4f76d1a03f9a1",
+          "sha256": "bc69e647891864ec10df5722129ddd592089df296b49f97187a2f2628fd8499a",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "3080bba18ae7bd4c955dbc8cf9cd9c84e9acd16d46d38bce8febfe11691098e1"
         },
         "single_model/readonly_mesh": {
-          "guidance_sha256": "b4e2778d5b63228801c644dd1ea1480008125aa7ebfd20136250e8635a5e846a",
-          "sha256": "eceff18414c2d7d71dfb1f30b4c1f6531eedefd30c307451785f174a7ec6935c",
-          "task_template_sha256": "3bbe1967c9e1623033170e082618c71e2ba89170540e2b0f7e1e623259b62972",
-          "tools_sha256": "1ee452a79c8f4aecccbb3c5ede42603615ca2c675819387b613e6b9aa79bf71c"
+          "guidance_sha256": "68efca87cd639d04501b4d3f14eaf92d2f4dec392fd111374709e26058a66384",
+          "sha256": "936bd566ad6955610aefd3b77feae091b93af0eb26c34dc56b58f486b4e6a2a6",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
         }
       },
       "product_projection": {
         "schema_version": "sim-bim-product-projection.v1",
-        "source_commit": "edd9ddaf495132f8055633c3150d9714cafcd945",
-        "source_domain_version": "domain-v156-20261031",
-        "source_registry_sha256": "aa745e5d0b2b9173fa2b3fc133d972fe0038e729a6b61b335875b595c56d0999",
-        "source_runtime_version": "runtime-v44-20261031",
+        "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc",
+        "source_domain_version": "domain-v169-20261101",
+        "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
+        "source_runtime_version": "runtime-v46-20261101",
         "strategy_sources": {
           "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
           "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-          "scripts/release/product-runtime-lock.json": "d5044d81e6615f65ac3930ecc09ac75e61cb0d1bb0ea5279e211000f6148a8f3",
-          "scripts/release/product_profile.json": "23798accbdf7fdbaa01a161299fbc2393c516307a88c57bc77ecece8b2112c85",
-          "scripts/release/product_projection.py": "6acbdfd872228bad5f76a5d01f5108c64f67f06cf0e2b1266d1f2a714939e89f",
-          "scripts/release/templates/product_package_init.py": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
+          "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
+          "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
+          "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
         }
       },
-      "source_commit": "edd9ddaf495132f8055633c3150d9714cafcd945",
+      "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc",
       "tool_catalog_sha256": {
-        "coordinator": "e532cccb003ca1897d32415fd1dc748f14d2b116a0611558c02d42826ab3a45d",
-        "coordinator_mesh": "d7cb6b2ce0d3b33820806d7f69b0f2aab53db7173a4a50d89ae5b2d48f76a425",
-        "readonly": "f379da2c95c70b8f51b791e4a3fa6972135c8716c6299489b822bca77c38bebd",
-        "readonly_mesh": "730b84e160670d5b70092d68cc9b5f64388a03706b909fd6c3030f01ba1373ac"
+        "coordinator": "4d6d405f333992101ff8c8fc3ac0a8c5a3e6217bfb9ce6f694e155a143e0f31f",
+        "coordinator_mesh": "bb6f39c2ce8d6ca6734e2aeaec52ed4afca282b6395c12dd58fb6e300974f2ee",
+        "readonly": "3080bba18ae7bd4c955dbc8cf9cd9c84e9acd16d46d38bce8febfe11691098e1",
+        "readonly_mesh": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
       }
     }
   },
@@ -986,26 +769,25 @@
   ],
   "product_projection": {
     "schema_version": "sim-bim-product-projection.v1",
-    "source_commit": "edd9ddaf495132f8055633c3150d9714cafcd945",
-    "source_domain_version": "domain-v156-20261031",
-    "source_registry_sha256": "aa745e5d0b2b9173fa2b3fc133d972fe0038e729a6b61b335875b595c56d0999",
-    "source_runtime_version": "runtime-v44-20261031",
+    "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc",
+    "source_domain_version": "domain-v169-20261101",
+    "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
+    "source_runtime_version": "runtime-v46-20261101",
     "strategy_sources": {
       "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
       "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-      "scripts/release/product-runtime-lock.json": "d5044d81e6615f65ac3930ecc09ac75e61cb0d1bb0ea5279e211000f6148a8f3",
-      "scripts/release/product_profile.json": "23798accbdf7fdbaa01a161299fbc2393c516307a88c57bc77ecece8b2112c85",
-      "scripts/release/product_projection.py": "6acbdfd872228bad5f76a5d01f5108c64f67f06cf0e2b1266d1f2a714939e89f",
-      "scripts/release/templates/product_package_init.py": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
+      "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
+      "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
+      "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
     }
   },
   "runtime_versions": {
-    "runtime-product-v1-00b8e71ddba394713b000f87": {
+    "runtime-product-v1-d5dfbdd64399fce2e7350035": {
       "coverage": "automatic_directories",
       "files": {
         "pyproject.toml": {
           "kind": "runtime",
-          "sha256": "8cf6ce6920ef84c4c6c608985d5785496312663f6e10f4be8e785b4bb22bc98d"
+          "sha256": "f2f1d98efe3b774c5e3c00cec374de26f6b3461f865616ae3bfd20af88c9a094"
         },
         "src/__init__.py": {
           "kind": "runtime",
@@ -1017,15 +799,15 @@
         },
         "src/agent_runtime/accounting.py": {
           "kind": "runtime",
-          "sha256": "0e5ae24346c92918eedf854794509df59b776820364a20f1d5749c17c273ac95"
+          "sha256": "e00b1efc927a4d3de7ac796a9076757f232b64339bf09d52a5796e8a143afca1"
         },
         "src/agent_runtime/adapter.py": {
           "kind": "runtime",
-          "sha256": "2303fb1d249813d86ecdb2c4bf81ffc34327fed2644602cbd557043a413b1ae1"
+          "sha256": "807e4863966a95fbdd347a1fe3e44c5041207633b73d88321f4a122b9a5bfc0f"
         },
         "src/agent_runtime/agent_registry.py": {
           "kind": "runtime",
-          "sha256": "200509d33c0075dbf49da8ea19aad5ff0d8d2e5eacd923e9c7f244f85dc51010"
+          "sha256": "8913162fda9cfe1b4e8a04932660d13a804cccf3faddf0f7f374c290b3c65bdb"
         },
         "src/agent_runtime/anthropic.py": {
           "kind": "runtime",
@@ -1053,11 +835,11 @@
         },
         "src/agent_runtime/context.py": {
           "kind": "runtime",
-          "sha256": "7dbd87ecb9889b9d08e068f1cb7931400bfd72918c962ba5b9c046704f9b86b7"
+          "sha256": "b3b8e6c7d2da12270ed808555750f45c1b63aee20001b2b0bcff25dfdd61ffce"
         },
         "src/agent_runtime/context_continuation.py": {
           "kind": "runtime",
-          "sha256": "d1b6282320e937d4dceb1086be1bc4550d22d887cb31218d86e5f9521a9c3269"
+          "sha256": "1d458f111fe611c419cf52e05df0e8544e4c713afb1123243f21ba57f1270c59"
         },
         "src/agent_runtime/continuation.py": {
           "kind": "runtime",
@@ -1073,11 +855,11 @@
         },
         "src/agent_runtime/estimation.py": {
           "kind": "runtime",
-          "sha256": "c7562b975a41f08c5bf4c932460f779a3d865dce5dbe1552551f620d149dd8f2"
+          "sha256": "a46d90cc40803b87eb67d34fce720b0e5caa85981962a57008708e907efd2973"
         },
         "src/agent_runtime/failures.py": {
           "kind": "runtime",
-          "sha256": "3066634efd49731b11bae4b49f3ca20603ad01a809c4d7c389ed1d62925989d6"
+          "sha256": "5b00179c2a1ad9dfc73bafb9cba9dbe687ca53d61ae5cfc4c00149a50ac3e516"
         },
         "src/agent_runtime/go_direct.py": {
           "kind": "runtime",
@@ -1089,11 +871,11 @@
         },
         "src/agent_runtime/json_tree.py": {
           "kind": "runtime",
-          "sha256": "53dc74751df46f4c85e14ed18756ee0786c3eeafe79970571962ba55aa21bd50"
+          "sha256": "9aeea569c2fb7f6040df1c334c1c11a3816f0f3ef6f100bb2b59a80b37474d3e"
         },
         "src/agent_runtime/loop.py": {
           "kind": "runtime",
-          "sha256": "f2ecc2ea869a607e50761c51340d254c6ad575d0d907dee9a25707587353b509"
+          "sha256": "32f1ec4dae4a1489dbe385cc54a476404d28fbddcfb9249c44ce9c0754944bcb"
         },
         "src/agent_runtime/mcp_tools.py": {
           "kind": "runtime",
@@ -1101,7 +883,7 @@
         },
         "src/agent_runtime/model_profiles.json": {
           "kind": "runtime",
-          "sha256": "a4a40292acd70d53803d1baaa5924aa836027edf7d441364538c2ce7bad4ebaa"
+          "sha256": "e4c5e6264f81d0f5cc1c0872e93c31dc3d4e0541da2ca0f35c2ec96cfb14f441"
         },
         "src/agent_runtime/network_recovery.py": {
           "kind": "runtime",
@@ -1109,11 +891,11 @@
         },
         "src/agent_runtime/openai_subscription.py": {
           "kind": "runtime",
-          "sha256": "7b2684af1aa8f720896e8e2bbcf09019e80894768ee331e13b66485500ff3c88"
+          "sha256": "64f9a7ac1ae1c7961d04cba70f83d5a72c3f02db4486543e3b50ec58a41b096c"
         },
         "src/agent_runtime/opencode_go.py": {
           "kind": "runtime",
-          "sha256": "b5b62a07a73672c9949a96e9c4277418ad485cb85c733eb3f92d2e36e29298c6"
+          "sha256": "e05d929257d165ac47a90b1bcbb5050c39d566355be6003170614fa8ec9e2c21"
         },
         "src/agent_runtime/output_limits.py": {
           "kind": "runtime",
@@ -1121,7 +903,7 @@
         },
         "src/agent_runtime/providers.py": {
           "kind": "runtime",
-          "sha256": "e2e4c37866687d1944293779314758a68534f0dcee4a0ad202ff5e4fcdc74e3d"
+          "sha256": "31f89fab4af304957ea050eb23c099078b1b042627b94581de2a819d8c3d28a0"
         },
         "src/agent_runtime/responses.py": {
           "kind": "runtime",
@@ -1129,7 +911,7 @@
         },
         "src/agent_runtime/route_dispatch.json": {
           "kind": "runtime",
-          "sha256": "884ef0d4ab9a56107cfc9e78950e96013e73c99b6389106edf62140b43884f92"
+          "sha256": "587407f13140678ce6c1bce67295f15276972c392b1ecf6a3e69ef29de9a94c0"
         },
         "src/agent_runtime/run_paths.py": {
           "kind": "runtime",
@@ -1137,7 +919,7 @@
         },
         "src/agent_runtime/store.py": {
           "kind": "runtime",
-          "sha256": "26142ea843f4bd809f237ce0561937f1a78242bde6daee0fb9659e5af43f680b"
+          "sha256": "f32ba75408c9a8666db7559e5c377ecfce4e851c7be1118d280fbc167598097d"
         },
         "src/agent_runtime/timing.py": {
           "kind": "runtime",
@@ -1149,27 +931,27 @@
         },
         "src/harness_contracts/__init__.py": {
           "kind": "runtime",
-          "sha256": "02035591d274b9400e40c91aa4be4d60d3dd3ebcea96b74f82abda85bb140d22"
+          "sha256": "e227ea1b99f9d03694725018d5198749c2f5fcc3ad55f245269e9d8c6badf7dd"
         },
         "src/harness_contracts/base.py": {
           "kind": "runtime",
-          "sha256": "5df2815acf3d1d03f5fff7f904e119989091c60b7e553da9517cc8a73a042c20"
+          "sha256": "464d26d3d36443e0ac874c256ea21ee01c945e207d0424468f0f19a3064b08c0"
         },
         "src/harness_contracts/budget.py": {
           "kind": "runtime",
-          "sha256": "348467b10eed57d693a01c047e2e23f3daf0a1a8a39f1d6592cf31efbc82550b"
+          "sha256": "1ebfb1badb42b06b5bb080884a2a6e385b1adb64bc5c9fe152139c8cc35b5d5a"
         },
         "src/harness_contracts/events.py": {
           "kind": "runtime",
-          "sha256": "e4946e80aad181342a51b5205dfca3667eb1729256d601d172d4e2bc59202ed1"
+          "sha256": "0bb37b55ad1eec93da9eedb5d1198cdd1e67ef10a37b86e03c6d6e11b96fa82e"
         },
         "src/harness_contracts/incremental.py": {
           "kind": "runtime",
-          "sha256": "c8a8c469c848c15adacc176ddfaa1e8ac9b3a60ca27fa02e8af69c137e4073a7"
+          "sha256": "5a7d17f676beda236df74618f65369370eb7fcff3a72ac7edae2cce79130ec29"
         },
         "src/harness_contracts/refs.py": {
           "kind": "runtime",
-          "sha256": "d22c4442a3970c4b13bbd1a6a78ff23e25a707dd331f84111f03b1784456a549"
+          "sha256": "9b05f49eb980e8dd79d9427ec16865b7ab136fc51fa139f75ec04f74e8a67a0a"
         },
         "src/harness_contracts/roles.py": {
           "kind": "runtime",
@@ -1181,7 +963,7 @@
         },
         "src/harness_contracts/validation.py": {
           "kind": "runtime",
-          "sha256": "b7aedddbe358d3f7cb3ab48856ba36a1f4c5674803355b87938721a2be124bdb"
+          "sha256": "f4d922e26270cf2a0c5e18fdd62b8a938b06ee569b12b70dbb22e6b714ff6007"
         },
         "src/utils/file_lock.py": {
           "kind": "runtime",
@@ -1189,25 +971,24 @@
         },
         "uv.lock": {
           "kind": "runtime",
-          "sha256": "258a130a8c702ec20fff419f0f2b15b6a1ba1f7058b2f71af82e2dab35b86093"
+          "sha256": "ea94a91c9e1210bcf87ffdce76e99142aa947eb051aadd3f1c8377dca719abd2"
         }
       },
       "product_projection": {
         "schema_version": "sim-bim-product-projection.v1",
-        "source_commit": "edd9ddaf495132f8055633c3150d9714cafcd945",
-        "source_domain_version": "domain-v156-20261031",
-        "source_registry_sha256": "aa745e5d0b2b9173fa2b3fc133d972fe0038e729a6b61b335875b595c56d0999",
-        "source_runtime_version": "runtime-v44-20261031",
+        "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc",
+        "source_domain_version": "domain-v169-20261101",
+        "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
+        "source_runtime_version": "runtime-v46-20261101",
         "strategy_sources": {
           "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
           "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-          "scripts/release/product-runtime-lock.json": "d5044d81e6615f65ac3930ecc09ac75e61cb0d1bb0ea5279e211000f6148a8f3",
-          "scripts/release/product_profile.json": "23798accbdf7fdbaa01a161299fbc2393c516307a88c57bc77ecece8b2112c85",
-          "scripts/release/product_projection.py": "6acbdfd872228bad5f76a5d01f5108c64f67f06cf0e2b1266d1f2a714939e89f",
-          "scripts/release/templates/product_package_init.py": "c3bfd41e209e65cc94cca8dd89df8f6d24928628086031e2d3e5605bc9827e96"
+          "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
+          "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
+          "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
         }
       },
-      "source_commit": "edd9ddaf495132f8055633c3150d9714cafcd945"
+      "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc"
     }
   },
   "schema_version": "agent-version-registry.v2",
@@ -1221,8 +1002,7 @@
       ".python-version",
       "config.example.json",
       "config.mesh.example.json",
-      "config.opencode-go.example.json",
-      "config.opencode-go-haiku.example.json"
+      "config.opencode-go.example.json"
     ],
     "runtime": [
       "src/agent_runtime",

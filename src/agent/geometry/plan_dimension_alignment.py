@@ -6,7 +6,7 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from src.agent.geometry.plan_ink_alignment import (
+from src.agent.geometry.plan_alignment import (
     _attachment_requirements,
     _append_line_reference,
     _axis_scale,
@@ -501,7 +501,7 @@ def align_plan_to_dimensions(plan: Mapping[str, Any], *, grid_step_m: float | No
         old_start_world = _world(old_anchors, start_px)
         old_end_world = _world(old_anchors, end_px)
         old_world_direction = 1 if old_end_world > old_start_world else -1
-        origin_basis = "dimension_chain" if "start_world_m" in chain else "legacy_anchor"
+        origin_basis = "dimension_chain" if "start_world_m" in chain else "existing_anchor"
         start_world = chain.get("start_world_m", old_start_world)
         end_world = start_world + old_world_direction * chain["total_mm"] / 1000.0
         cumulative = [0.0]
@@ -601,13 +601,13 @@ def align_plan_to_dimensions(plan: Mapping[str, Any], *, grid_step_m: float | No
                           "tolerance_m": MAX_ALIGNMENT_WORLD_M,
                           "status": "consistent" if maximum_difference < MAX_ALIGNMENT_WORLD_M else "warning",
                           "message": (
-                              "legacy anchors supply the origin and agree with the accepted overall chain"
-                              if origin_basis == "legacy_anchor" and maximum_difference < MAX_ALIGNMENT_WORLD_M else
-                              "legacy anchors supply the origin but disagree with the accepted overall chain scale"
-                              if origin_basis == "legacy_anchor" else
-                              "legacy anchors agree with the dimension-chain origin and endpoint"
+                              "Existing anchors supply the origin and agree with the accepted overall chain"
+                              if origin_basis == "existing_anchor" and maximum_difference < MAX_ALIGNMENT_WORLD_M else
+                              "Existing anchors supply the origin but disagree with the accepted overall chain scale"
+                              if origin_basis == "existing_anchor" else
+                              "Existing anchors agree with the dimension-chain origin and endpoint"
                               if maximum_difference < MAX_ALIGNMENT_WORLD_M else
-                              "legacy anchors disagree with the dimension-chain origin or endpoint; the chain sets the axis"
+                              "Existing anchors disagree with the dimension-chain origin or endpoint; the chain sets the axis"
                           ),
                       },
                       "exact_tick_world_m": [round(value, 9) for value in world_ticks],

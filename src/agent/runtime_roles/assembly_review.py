@@ -428,7 +428,7 @@ class AssemblyReview:
         if hashlib.sha256(raw).hexdigest() != digest or digest != binding["source_sha256"]:
             raise ValueError("accepted trial source hash changed")
         product = json.loads(raw)
-        return comparison_facts(product) if receipt.get("reading_product_file") else product
+        return comparison_facts(product)
 
     @staticmethod
     def _identified(row, field="change_id"):

@@ -56,12 +56,12 @@ def revise_operations(before, operations, *, image_size=None, allowed_targets=No
 def topology_issues(receipts):
     """Include earlier warnings: deleting a bad wall cannot erase its review duty.
 
-    Only from trials that produced geometry: a draft that never compiled (10-06
-    probe run2: dividers written in metres) leaves warnings about nothing real.
+    Only include trials that produced geometry; warnings from a draft that
+    never compiled cannot describe a saved wall.
     """
     found = {}
     for receipt in receipts:
-        if receipt.get("reading_geometry_ready", receipt.get("source_geometry_ready")) is False:
+        if receipt.get("reading_geometry_ready") is not True:
             continue
         report = receipt.get("drawing_differences", {})
         for row in report.get("items", []) if isinstance(report, Mapping) else []:
@@ -87,9 +87,8 @@ def _segments(plan):
 
 
 def unhosted_openings(plan):
-    """Every opening not lying on one declared footprint edge or partition, with the
-    nearest parallel line. The compiler stops at the first; a reader then spends one
-    request per opening (10-06 probe run3)."""
+    """Locate all openings outside declared footprint edges or partitions, with
+    their nearest parallel lines, so one revision can address them together."""
     from shapely.geometry import LineString
 
     lines = [(identity, LineString([a, b])) for identity, a, b in _segments(plan)]
@@ -121,9 +120,8 @@ def unhosted_openings(plan):
 def loose_partition_ends(plan, tolerance=0.5):
     """Partition ends touching no other declared line, with the nearest line and gap.
 
-    The compiler reports dangling segments only; readers repeatedly stopped dividers
-    at the inner face of an exterior wall, 10-20 px short of the footprint line
-    (10-06 probe run2, sm24 debug run2).
+    The compiler reports dangling segments. This check also identifies divider
+    ends that stop short of an exterior footprint line or another partition.
     """
     from shapely.geometry import LineString, Point
 
@@ -237,6 +235,8 @@ def validate_topology(issues, decisions, plan, *, image_size=None):
             # Difference reports round pixels. Reuse the exact declared wall
             # coordinate when available so a fractional pixel cannot evade the check.
             original = issue.get("divider_points")
+            if not isinstance(original, list) or len(original) < 2:
+                raise ValueError("topology issue requires its recorded divider points")
             if original:
                 for a, b in zip(original, original[1:]):
                     if start[0] == end[0] and a[0] == b[0] and abs(a[0] - start[0]) <= .51:
@@ -259,13 +259,7 @@ def validate_topology(issues, decisions, plan, *, image_size=None):
                     if overlap >= .85 * gap.length:
                         raise ValueError("continuous_space still has a declared wall spanning the flagged local gap")
                 if segment_id == issue.get("divider"):
-                    if original:
-                        moved = line.difference(LineString(original)).length > 1e-6
-                    else:
-                        # Legacy warnings have only the flagged straight line.
-                        moved = (abs(a[0] - start[0]) > 1e-6 or abs(b[0] - start[0]) > 1e-6
-                                 if start[0] == end[0] else
-                                 abs(a[1] - start[1]) > 1e-6 or abs(b[1] - start[1]) > 1e-6)
+                    moved = line.difference(LineString(original)).length > 1e-6
                     if moved:
                         raise ValueError("continuous_space requires removing the flagged wall segment, not moving its divider")
                 if gap.intersection(line).length > 1e-6:

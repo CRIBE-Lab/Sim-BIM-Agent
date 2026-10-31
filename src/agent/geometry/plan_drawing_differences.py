@@ -170,8 +170,8 @@ def _wall_like(strokes, mpp_cross):
 def _interrupted_pairs(mask, orient, along_mpp, cross_mpp):
     """Join bounded doorway gaps for *paired* faces only, never infer a wall.
 
-    sm24 run100 omitted the corridor side: its two faces stop at doors and meet
-    another omitted wall, so neither uninterrupted-stroke/junction test fired.
+    Faces can stop at door openings and meet another omitted wall, escaping
+    both uninterrupted-stroke and junction checks.
     """
     closed = mask.copy()
     count = mask.shape[1] if orient == 'v' else mask.shape[0]
@@ -373,7 +373,7 @@ def drawing_differences(image, plan, *, image_name=None, image_sha256=None, plan
         hosted = [(oid, kind, l, h) for oid, kind, o, a, l, h in openings
                   if o == orient and abs(a - at) <= px(FACE_REACH_M, cross) and l >= lo - 2 and h <= hi + 2]
         # A full-width open connection can hide a made-up partition: deducting
-        # the opening leaves no wall to sample (sm25 candidate_07, D_core).
+        # the opening leaves no wall to sample.
         junctions = [lo,hi]
         for o,a,l,h in declared_walls:
             if o != orient and l-1 <= at <= h+1 and lo < a < hi:

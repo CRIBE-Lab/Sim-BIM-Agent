@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from src.agent.geometry.source_model import _digest
 from src.agent.geometry.source_floor_selection import select_source_floor, select_source_floor_openings
-from src.agent.reading.cv_toolbox.tools import _load_rgb, px_m_calibrator
+from src.agent.geometry.image_calibration import _load_rgb, px_m_calibrator
 
 
 _MAGENTA = (255, 0, 255)

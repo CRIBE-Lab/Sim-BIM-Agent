@@ -1,4 +1,4 @@
-"""Building policy for the frozen 5bb10538 BIM MCP service.
+"""Tool access and recovery policy for the version-verified BIM service.
 
 This module treats the service's readonly registration as the source of truth
 for local observation, then inspects each coordinator-only implementation.
@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 from typing import Any, Literal, Protocol
 
-from scripts.tool_scripts.bim_agent_guidance import REFERENCES, build_guide, filter_tool_catalog, tool_capabilities
+from scripts.tool_scripts.bim_agent_guidance import REFERENCES, build_guide
 from src.agent_runtime.agent_registry import AgentVersionMismatch, agent_version_record
 from src.agent_runtime.mcp_tools import McpToolClient
 from src.harness_contracts.budget import BudgetAmounts
@@ -32,7 +32,6 @@ from src.harness_contracts.roles import (
 )
 
 
-FROZEN_BASELINE_COMMIT = "5bb10538"
 Repeatability = Literal["read_only", "idempotent_write", "non_idempotent_write"]
 
 MESH_OBSERVER_TOOL_NAMES = (
@@ -44,21 +43,18 @@ MESH_COORDINATOR_ONLY_TOOL_NAMES = (
     "set_candidate_mesh_frame",
 )
 LOCAL_OBSERVER_TOOL_NAMES = (
-    "get_bim_reference", "inputs", "view_image", "pixel_profile",
+    "get_bim_reference", "inputs", "view_image",
     "view_pixel_profile", "view_pixel_region_overview", "view_pixel_region",
-    "preview_space_trace", "view_space_trace", "select_space_trace",
     "map_dimension_chain", "compare_facade_spans", "map_pixels", "read_candidate_items",
 )
 COORDINATOR_ONLY_TOOL_NAMES = (
     "record_inference", "inspect_inference", "audit_inference_candidate",
     "inspect_plan_draft", "revise_plan_bim", "view_plan_wall_support",
-    "claim_transaction", "record_claim", "replace_claim_sources", "view_claim_evidence", "decide_claim",
-    "claim_status", "confirm_claims", "check_wall_dimensions", "inspect_candidate",
+    "claim_transaction", "replace_claim_sources", "claim_status", "check_wall_dimensions", "inspect_candidate",
     "check_source_space_relation", "check_openings",
-    "record_work_review", "finish_bim", "overlay_candidate", "revise_bim",
-    "review_detail", "build_plan_bim", "assemble_plan_bim", "build_parametric_bim",
-    "inspect_parametric_plan", "patch_parametric_bim", "build_bim", "view_elevation_candidate", "view_candidate",
-    "prepare_elevation_reading", "apply_elevation_readings",
+    "finish_bim", "overlay_candidate", "revise_bim",
+    "build_plan_bim", "assemble_plan_bim", "build_parametric_bim",
+    "inspect_parametric_plan", "patch_parametric_bim", "build_bim", "view_elevation_candidate", "prepare_elevation_reading", "apply_elevation_readings",
 )
 COORDINATOR_TOOL_NAMES = LOCAL_OBSERVER_TOOL_NAMES + COORDINATOR_ONLY_TOOL_NAMES
 MESH_LOCAL_OBSERVER_TOOL_NAMES = MESH_OBSERVER_TOOL_NAMES + LOCAL_OBSERVER_TOOL_NAMES
@@ -74,10 +70,9 @@ MESH_COORDINATOR_TOOL_NAMES = (
 # as a completely write-free filesystem operation.
 COORDINATOR_INSPECTION_TOOL_NAMES = (
     "inspect_inference", "inspect_plan_draft", "view_plan_wall_support",
-    "view_claim_evidence", "claim_status", "check_wall_dimensions",
+    "claim_status", "check_wall_dimensions",
     "inspect_candidate", "inspect_parametric_plan",
-    "view_candidate",
-)
+    )
 NON_IDEMPOTENT_WRITE_TOOL_NAMES = tuple(
     name for name in COORDINATOR_ONLY_TOOL_NAMES
     if name not in COORDINATOR_INSPECTION_TOOL_NAMES
@@ -90,9 +85,7 @@ FROZEN_TOOL_REPEATABILITY: Mapping[str, Repeatability] = {
     **{name: "non_idempotent_write" for name in NON_IDEMPOTENT_WRITE_TOOL_NAMES},
 }
 
-# This one tool does not look remote at its call site, but its implementation
-# starts a Haiku subprocess.  Phase 1 has no delegation/runtime model calls.
-PHASE1_FORBIDDEN_TOOLS = frozenset({"review_detail"})
+
 
 
 class ToolCatalogMismatch(ValueError):
@@ -100,7 +93,7 @@ class ToolCatalogMismatch(ValueError):
 
 
 class ToolAccessDenied(PermissionError):
-    """A role, phase rule, or repeatability policy rejected a call before MCP."""
+    """A role or repeatability policy rejected a call before MCP."""
 
 
 class ToolClient(Protocol):
@@ -145,9 +138,8 @@ def frozen_bim_client(
     run_directory: Path,
     readonly: bool = False,
     repository_root: Path | None = None,
-    *, enabled_only: bool = False,
 ) -> McpToolClient:
-    """Create the stage-1 building server transport from generic MCP pieces."""
+    """Create the version-verified building server transport over MCP."""
 
     root = (Path(repository_root) if repository_root is not None
             else Path(__file__).resolve().parents[2]).resolve()
@@ -162,8 +154,6 @@ def frozen_bim_client(
     args = [str(server), "serve", str(run)]
     if readonly:
         args.append("--readonly")
-    if enabled_only:
-        args.append("--enabled-only")
     return McpToolClient(
         command=sys.executable,
         args=args,
@@ -247,7 +237,7 @@ def coordinator_role(budget: BudgetAmounts) -> RoleDefinition:
             InputMaterialRequirement(name="frozen_prompt_material", media_type="text/plain"),
         ),
         return_requirements=(
-            ReturnRequirement(name="saved_candidate_or_stop_reason", schema_ref="stage1/run-result"),
+            ReturnRequirement(name="saved_candidate_or_stop_reason", schema_ref="runtime/run-result"),
         ),
         budget=budget,
     )
@@ -267,7 +257,7 @@ def local_observer_role(budget: BudgetAmounts) -> RoleDefinition:
             InputMaterialRequirement(name="localized_question", media_type="text/plain"),
         ),
         return_requirements=(
-            ReturnRequirement(name="observation", schema_ref="stage0/localized-observation"),
+            ReturnRequirement(name="observation", schema_ref="runtime/localized-observation"),
         ),
         budget=budget,
         read_only=True,
@@ -275,7 +265,7 @@ def local_observer_role(budget: BudgetAmounts) -> RoleDefinition:
 
 
 class FrozenBimTools:
-    """Apply frozen catalog, role grants, and phase-one no-delegation rules."""
+    """Enforce the verified tool catalog, role grants, and recovery policies."""
 
     def __init__(
         self,
@@ -283,23 +273,18 @@ class FrozenBimTools:
         role: RoleDefinition,
         *,
         run_directory: Path,
-        phase: int = 1,
     ) -> None:
         self.client = client
         self.role = role
         self.run_directory = Path(run_directory).resolve()
-        self.phase = phase
         self._catalog_checked = False
         manifest_path = self.run_directory / "inputs.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.mesh = bool(manifest.get("mesh_input"))
-        self.capabilities = tool_capabilities(manifest)
-        if phase == 1:
-            self.capabilities["review_detail"] = False
 
     @asynccontextmanager
     async def task_session(self, *, directory, root, role, timing, images):
-        """Give a read-only child its own T1 clock and measurement sidecars.
+        """Give a read-only child its own task clock and measurement sidecars.
 
         Copies only the originals supplied in the evidence package. The
         EvidenceTools wrapper still enforces the supplied crop boundaries.
@@ -334,7 +319,7 @@ class FrozenBimTools:
         tools = await self.client.list_tools()
         validate_frozen_catalog(tools, readonly=self.role.read_only, mesh=self.mesh)
         self._catalog_checked = True
-        return filter_tool_catalog(tools, **self.capabilities)
+        return tools
 
     def repeatability(self, name: str) -> Repeatability:
         """Expose the frozen retry classification to the runtime loop."""
@@ -344,7 +329,7 @@ class FrozenBimTools:
     def recovery_policy(self, name: str) -> str:
         # This is deliberately independent of the broader read-only permission
         # class: some tools create workflow decisions or launch other work.
-        repeatable_observations = {"get_bim_reference", "inputs", "view_image", "pixel_profile",
+        repeatable_observations = {"get_bim_reference", "inputs", "view_image",
             "view_pixel_profile", "view_pixel_region_overview", "view_pixel_region",
             "map_pixels", "read_candidate_items"}
         return "retry_read" if name in repeatable_observations else "manual"
@@ -356,7 +341,7 @@ class FrozenBimTools:
         metadata = _result_metadata(raw)
         if (metadata.get("error") or not isinstance(metadata.get("queries"), list)
                 or not metadata.get("details_file") or not metadata.get("details_sha256")):
-            # Old replies without a readable full-report reference stay whole.
+            # Replies without a readable full-report reference stay whole.
             return raw
         from scripts.tool_scripts.bim_agent_replies import measurement_summary
         shown = copy.deepcopy(raw)
@@ -379,21 +364,6 @@ class FrozenBimTools:
         repeatability = repeatability_for(name)
         required_access: Literal["read", "write"] = "read" if repeatability == "read_only" else "write"
         authorize_tool_call(self.role, name, required_access)
-        if not filter_tool_catalog([{"name": name}], **self.capabilities):
-            # This is a known policy refusal before the MCP server is called.
-            # Return it through the ordinary tool-result envelope so the loop
-            # records a failed call rather than an unknown write outcome.
-            blocked = {
-                "status": "blocked",
-                "failure_stage": "before_execution",
-                "tool_name": name,
-                "reason": f"{name} is disabled for this run",
-            }
-            return {
-                "content": [{"type": "text", "text": json.dumps(blocked, ensure_ascii=False)}],
-                "isError": True,
-                "structuredContent": blocked,
-            }
         if self.role.read_only and repeatability != "read_only":
             # authorize_tool_call already rejects this for valid RoleDefinition,
             # but keep the policy obvious at the executor boundary.
@@ -409,7 +379,7 @@ class FrozenBimTools:
         Unlike the state snapshot, this includes viewer HTML, source/proposal
         files, reports, evidence images, and observational sidecars so a stop
         receipt does not hide a useful partial result.  Only transport scratch,
-        bytecode, and the separately captured legacy tool log are excluded.
+        bytecode, and the separately captured tool audit log are excluded.
         """
 
         if not self.run_directory.is_dir():
@@ -518,7 +488,7 @@ def _is_durable_artifact(path: Path, run_directory: Path) -> bool:
     relative = path.relative_to(run_directory)
     excluded_directories = {
         ".harness_tmp", "__pycache__", "bridge", "mesh_observations", "mesh_overlays",
-        "overlay_calibrations", "source_image_projections", "pixel_profiles", "space_traces",
+        "overlay_calibrations", "source_image_projections", "pixel_profiles",
         "facade_comparisons", "space_relation_reviews", "plan_wall_support", "image_views",
         "pixel_region_overviews", "pixel_regions",
     }
@@ -614,7 +584,6 @@ def write_frozen_tool_catalog(output_directory: Path, tools: list[dict[str, Any]
     policy = {
         tool["name"]: {
             "repeatability": repeatability_for(tool["name"]),
-            "phase1_available": tool["name"] not in PHASE1_FORBIDDEN_TOOLS,
         }
         for tool in definitions
     }

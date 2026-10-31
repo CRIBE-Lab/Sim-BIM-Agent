@@ -1,10 +1,4 @@
-"""Read-only facade evidence checks for T1; never approve or edit geometry.
-
-GLM sm24 linked every opening to its facade but spread one height chain over
-different window widths. A whole-image citation or missing calibration cannot
-establish per-opening location. Report those limits separately from a measured
-source-region miss; all remain advisory, including on delivery.
-"""
+"""Read-only facade evidence checks. Whole-image citations and missing calibration do not establish per-opening locations; these limits remain explicit at delivery."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -54,9 +48,8 @@ def _pixel_box(opening, facade, transform):
 def located_height_report(toolkit, candidate, current_state=None):
     """One external-opening table: current values, binding, location and limits.
 
-    A2-T replaces the two competing reports. T1 sm24/sm25 counted every opening
-    inside a shared source box as located. A box covering multiple exterior
-    openings now requires individual evidence, even if all numbers match.
+    A box covering multiple exterior openings requires individual evidence,
+    even if all numbers match.
     """
     store = toolkit.claims()
     _, source = store.candidate(candidate)
@@ -186,18 +179,13 @@ def located_height_report(toolkit, candidate, current_state=None):
         note="Current values, evidence binding and source location, not drawing correctness. A region containing several openings needs individual evidence. Report only.")
 
 
-def compact_located_heights(report):
-    """Compatibility helper: the unified table is already the model presentation."""
-    return report
-
-
 _COUNT_EXAMPLE = {"observation_type": "facade_count", "image": "elevation.png",
     "floor_id": "L1", "facade": "South", "window_count": 4,
     "reason": "Synthetic format only; replace with your own observed facade total"}
 
 
 def record_facade_count(toolkit, observation):
-    """GLM sm25 missed two west windows: save one image/floor/facade total.
+    """Save one observed image/floor/facade total.
 
     Counts describe the drawing, so can precede any candidate. Separate immutable
     files avoid confusing observational totals with adopted geometric parameters.

@@ -323,12 +323,12 @@ class ToolExecutionPayload(ContractModel):
     shown_result: CapturedValue
     repeatability: Literal["read_only", "idempotent_write", "non_idempotent_write"]
     outcome: Literal["succeeded", "failed", "unknown"]
-    capture_scope: Literal["complete", "historical_excerpt"] = "complete"
+    capture_scope: Literal["complete"] = "complete"
     operation_key: NonEmptyStr | None = None
     applied_write_id: NonEmptyStr | None = None
     retry_event_id: NonEmptyStr | None = None
     invocation_event_id: NonEmptyStr | None = None
-    presentation_status: Literal["sent", "prepared", "historical_unverified"] = "sent"
+    presentation_status: Literal["sent", "prepared"] = "sent"
     failure: ToolFailureDetails | None = None
 
     @model_validator(mode="after")
@@ -341,7 +341,7 @@ class ToolExecutionPayload(ContractModel):
         if self.outcome == "succeeded":
             if self.failure is not None:
                 raise ValueError("a successful execution cannot carry failure details")
-            if self.capture_scope == "complete" and (
+            if (
                 self.raw_result.kind == "missing" or self.shown_result.kind == "missing"
             ):
                 raise ValueError(
@@ -593,11 +593,8 @@ class NetworkRecoveryPayload(ContractModel):
         return self
 
 
-class ExternalCoordinatorMcpPayload(ContractModel):
-    event_type: Literal["external_coordinator_mcp"] = "external_coordinator_mcp"
-    phase: Literal["dispatch", "operation", "return"]
-    coordinator_task_id: NonEmptyStr
-    method: NonEmptyStr
+class ContextImportPayload(ContractModel):
+    event_type: Literal["context_import"] = "context_import"
     request_content: CapturedValue
     result_content: CapturedValue
 
@@ -629,7 +626,7 @@ EventPayload = Annotated[
     | ContextEventPayload
     | CheckpointPayload
     | NetworkRecoveryPayload
-    | ExternalCoordinatorMcpPayload
+    | ContextImportPayload
     | RunAggregateUsagePayload,
     Field(discriminator="event_type"),
 ]

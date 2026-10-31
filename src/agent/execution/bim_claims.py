@@ -78,7 +78,7 @@ class Claim(StrictModel):
     reason: str = Field(min_length=1)
     sources: list[ImageRef | ViewedImageRef]
     values: dict[str, Annotated[LiteralValue | AxisValue | ChainValue, Field(discriminator="type")]]
-    # Omitted preserves the legacy all-values/all-objects contract. An explicit
+    # Omitted preserves the all-values/all-objects scope. An explicit
     # empty list marks supporting evidence, never an applicable parameter.
     value_targets: dict[str, list[ObjectRef]] | None = None
     observation_mode: Literal["direct", "candidate_review"] = "direct"

@@ -24,14 +24,6 @@ from .submission import parse_target
 MANIFEST = "reader_continuation.json"
 PENDING = "reader_continuation.pending.json"
 SCHEMA = "reader-continuation.v1"
-COMPATIBLE_DOMAIN_PAIRS = {("domain-v67-20261012", "domain-v68-20261012")}
-COMPATIBLE_CHANGES = frozenset({
-    "src/agent/runtime_roles/entry.py", "src/agent/runtime_roles/session.py",
-    "src/agent/runtime_roles/artifacts.py", "src/agent/runtime_roles/continuation.py",
-    "src/agent/runtime_configuration.py",
-    "src/agent/version_fingerprints.py",
-})
-NEW_COMPATIBLE_FILES = frozenset({"src/agent/runtime_roles/continuation.py"})
 
 
 def _sha(raw):
@@ -43,7 +35,7 @@ def _resolve_selection(source, selection):
 
 
 def verify_domain_compatibility(source, root):
-    """Accept exact releases or the reviewed reader-only migration, never kernel drift."""
+    """Require identical domain identity and recorded bytes before reusing evidence."""
     from src.agent_runtime.agent_registry import discover_files, load_agent_registry, _registry_path
 
     root = Path(root).resolve()
@@ -59,20 +51,18 @@ def verify_domain_compatibility(source, root):
     if evidence is None or json.loads(source.get_bytes(HashedBlobRef.model_validate(evidence))) != {
             "version_id": old, **registered}:
         raise ValueError("source domain evidence differs from its immutable registered release")
-    if old != current and (old, current) not in COMPATIBLE_DOMAIN_PAIRS:
-        raise ValueError("source and destination domains have no explicit reader-evidence compatibility")
+    if old != current:
+        raise ValueError("reader continuation requires the same domain version")
     actual = discover_files(root, "domain", scope=registry["scope"], registry_path=registry_path)
     current_record = registry["domain_versions"][current]
     if actual != current_record["files"]:
         raise ValueError("destination domain files differ from the current registered release")
     previous = registered["files"]
     changed = sorted(key for key in set(previous) | set(actual) if previous.get(key) != actual.get(key))
-    added, removed = set(actual) - set(previous), set(previous) - set(actual)
-    if ((old == current and changed) or removed or added - NEW_COMPATIBLE_FILES
-            or set(changed) - COMPATIBLE_CHANGES):
-        raise ValueError("reader continuation would cross unreviewed domain or geometry changes: " + ", ".join(changed))
-    return {"source_domain": old, "destination_domain": current, "changed_files": changed,
-            "rule": "identical_release" if old == current else "reviewed_reader_continuation_only"}
+    if changed:
+        raise ValueError("reader continuation domain files changed: " + ", ".join(changed))
+    return {"source_domain": old, "destination_domain": current, "changed_files": [],
+            "rule": "identical_release"}
 
 
 def _relative(source, path):
@@ -228,7 +218,8 @@ def _plan_delivery(source, registry, task, record, imported_manifest):
         if event.payload.event_type != "tool_execution" or event.payload.tool_name != "trial_plan_bim":
             continue
         # Existing selection logic checks the entire saved receipt identity.
-        one = SimpleNamespace(events=[event], resolve=child.resolve)
+        one = SimpleNamespace(events=[event], resolve=child.resolve,
+                              task_directory=child.task_directory)
         scope = SimpleNamespace(store=source, registry=SimpleNamespace(child=lambda _: one))
         candidate = RoleSession._recoverable_plan_trial_event(scope, task["task_id"])
         if (candidate and candidate.get("draft_status") == "passed"

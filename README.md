@@ -125,7 +125,14 @@ DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY
 
 可用模型以账号返回的列表为准。图纸模板为多个角色分别配置模型；调整型号时，需要同时修改顶层模型字段和 `roles` 中的相应设置。
 
-使用 OpenCode Go 的用户可参考 [配置示例](config.opencode-go.example.json)。
+使用 OpenCode Go 的用户可直接复制 [DeepSeek Flash 图纸配置](config.opencode-go.example.json)。此线路的型号为 `deepseek-v4.1-flash`。在 `D:/Sim-BIM-Data/config/opencode-go.env` 写入下面两行，并将配置中的 `credentials_file` 改为你实际保存的位置：
+
+```dotenv
+OPENCODE_GO_BASE_URL=https://opencode.ai/inference/go/v1
+OPENCODE_GO_API_KEY=替换为你的密钥
+```
+
+用于 mesh 时，在 mesh 模板中填写相同的 provider、model、credentials_file 和 reasoning_effort；保留 `reasoning_history: "all"`。
 
 ## 开始建模
 

@@ -17,14 +17,15 @@ def _bytes(value):
 
 
 def product_identity(receipt):
-    """Both old BIM trials and current planar trials retain exact product hashes."""
-    if receipt.get("reading_product_file"):
-        return receipt["reading_product_file"], receipt["reading_product_sha256"]
-    return f"{receipt['candidate']}/source_model.json", receipt.get("candidate_source_sha256")
+    """Require the current saved planar product and its exact content identity."""
+    filename, digest = receipt.get("reading_product_file"), receipt.get("reading_product_sha256")
+    if not isinstance(filename, str) or not filename or not isinstance(digest, str) or not digest:
+        raise ValueError("plan trial requires a saved reading product and hash")
+    return filename, digest
 
 
 def geometry_ready(receipt):
-    return receipt.get("reading_geometry_ready", receipt.get("source_geometry_ready")) is True
+    return receipt.get("reading_geometry_ready") is True
 
 
 def comparison_facts(product):

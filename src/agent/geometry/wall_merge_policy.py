@@ -58,7 +58,7 @@ def prepare_thickness_plan(plan):
 
 def _state(plan):
     if not plan.get('regularization_inputs', {}).get('reading_alignment'):
-        from src.agent.geometry.plan_ink_alignment import _set_reading_alignment
+        from src.agent.geometry.plan_alignment import _set_reading_alignment
         _set_reading_alignment(plan, 'dimensions', {'status': 'not_supplied'})
     return plan.setdefault('regularization_inputs', {}).setdefault(
         'reading_alignment', {}).setdefault('wall_merging', {})

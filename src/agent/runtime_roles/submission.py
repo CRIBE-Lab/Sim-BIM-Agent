@@ -98,8 +98,7 @@ _FLOOR_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$")
 
 
 def canonical_target(role_id, target):
-    """One spelling per target. 10-07 sm24 run4: "plan/F1" and "elevation/North" were
-    rejected, then "plan F1" was admitted as a floor ID that no reader plan could match."""
+    """Normalize role-prefixed targets to a matching floor or facade identity."""
     if not isinstance(target, str):
         return target
     text = target.strip()
@@ -276,10 +275,7 @@ class ReaderSubmission:
         from .guidance import ELEVATION_EXAMPLE
 
         tool = SUBMISSION_TOOLS[self.role_id]
-        # Old recorded calls may still supply located evidence. Keep and validate
-        # it, but do not advertise redundant handwriting in the new tool schema.
         arguments = dict(arguments)
-        legacy_evidence = arguments.pop("evidence", None) if self.role_id == "plan_reader" else None
         try:
             jsonschema.validate(arguments, tool["inputSchema"])
         except jsonschema.ValidationError as error:
@@ -291,7 +287,7 @@ class ReaderSubmission:
         if self.role_id == "plan_reader":
             from .coordinates import validate_north_arrow
             passed = [(index, row) for index, row in enumerate(self.trial.receipts, 1)
-                      if row.get("status") == "passed" and row.get("reading_geometry_ready", row.get("source_geometry_ready")) is not False]
+                      if row.get("status") == "passed" and row.get("reading_geometry_ready") is True]
             if not passed:
                 raise ValueError("submission requires a successful isolated trial in this task")
             index, latest = passed[-1]
@@ -308,11 +304,6 @@ class ReaderSubmission:
             numeric = self.trial.numeric_plan(validation)
             generated = automatic_plan_evidence(numeric, image_name=self.image_name, image_size=self.image_size)
             evidence = generated
-            if legacy_evidence is not None:
-                if not isinstance(legacy_evidence, list):
-                    raise ValueError("legacy evidence must be a list")
-                supplied = {row.get("item") for row in legacy_evidence if isinstance(row, dict)}
-                evidence = [*legacy_evidence, *(row for row in generated if row["item"] not in supplied)]
             artifact = validate_plan_artifact({"plan": numeric, "evidence": evidence,
                                                "unresolved": numeric["unresolved"]}, image_name=self.image_name)
             note_targets = {
@@ -344,8 +335,7 @@ class ReaderSubmission:
                 "wall_reference": _wall_defaults(numeric, generated, arguments.get("wall_reference", {}),
                                                   image_size=self.image_size),
                 "evidence_origin": {"method": "verified_trial_pixels", "plan_sha256": digest,
-                    "numeric_plan_sha256": validation.get("compiled_numeric_plan_sha256"),
-                    "legacy_evidence_items": [row["item"] for row in legacy_evidence or []]},
+                    "numeric_plan_sha256": validation.get("compiled_numeric_plan_sha256")},
                 "notes": notes,
                 "opening_hosts": opening_hosts(numeric),
                 "topology_issues": issues,
