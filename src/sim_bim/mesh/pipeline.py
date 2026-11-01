@@ -10,6 +10,7 @@ from typing import Final, Literal, Self, get_args
 import numpy as np
 import shapely
 import trimesh
+from numpy.typing import NDArray
 from pydantic import Field, model_validator
 from pydantic_ai import Agent, BinaryContent, ModelRetry, RunContext
 from shapely.geometry import LineString, Polygon, box
@@ -20,13 +21,14 @@ from sim_bim.agents.session import Session
 from sim_bim.bim.schema import (
     BuildingSchema,
     OpeningSchema,
+    ReferenceMeshSchema,
     SpaceSchema,
     StoreySchema,
     WallSchema,
 )
 from sim_bim.drawing.images import png_bytes, render_region
 from sim_bim.drawing.readings import Facing
-from sim_bim.mesh.model import MeshModel, load_glb
+from sim_bim.mesh.model import Y_UP_TO_Z_UP, MeshModel, load_glb
 from sim_bim.mesh.raster import FacadeProjection, render_facade
 
 FACINGS: Final[tuple[Facing, ...]] = get_args(Facing.__value__)
@@ -34,6 +36,7 @@ IMAGE_SIDE_PX: Final = 1600
 SECTION_HEIGHT_M: Final = 1.2
 WALL_THICKNESS_M: Final = 0.3
 CLOSE_GAP_M: Final = 0.8
+REFERENCE_FILE: Final = "reference.glb"
 
 FACADE_INSTRUCTIONS = """\
 You read one orthographic facade image rendered from a textured 3D building mesh. The first
@@ -112,8 +115,11 @@ def _check_facade(
     return reading
 
 
-def align_to_axes(model: MeshModel) -> MeshModel:
-    """Rotate about z so the dominant wall directions lie along x and y."""
+def align_to_axes(model: MeshModel) -> tuple[MeshModel, NDArray[np.float64]]:
+    """Rotate about z so the dominant wall directions lie along x and y.
+
+    Returns the rotated model and the 4x4 rotation applied.
+    """
     triangles = model.vertices[model.faces]
     normals = np.cross(
         triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
@@ -129,9 +135,8 @@ def align_to_axes(model: MeshModel) -> MeshModel:
     offset = (angles - peak + 45.0) % 90.0 - 45.0
     near = np.abs(offset) <= 1.5
     peak += float(np.average(offset[near], weights=weights[near]))
-    return model.transformed(
-        trimesh.transformations.rotation_matrix(math.radians(-peak), (0, 0, 1))
-    )
+    rotation = trimesh.transformations.rotation_matrix(math.radians(-peak), (0, 0, 1))
+    return model.transformed(rotation), rotation
 
 
 def _to_world(facing: Facing, u: float) -> float:
@@ -172,7 +177,7 @@ async def run_mesh(
     Raises:
         ValueError: If the mesh has no triangles or no facade could be read.
     """
-    model = align_to_axes(await asyncio.to_thread(load_glb, glb))
+    model, rotation = align_to_axes(await asyncio.to_thread(load_glb, glb))
     span = float((model.vertices.max(0) - model.vertices.min(0)).max())
     px_per_unit = IMAGE_SIDE_PX / span
     readings: dict[Facing, tuple[FacadeReadingSchema, FacadeProjection]] = {}
@@ -205,11 +210,12 @@ async def run_mesh(
     async with asyncio.TaskGroup() as group:
         for facing in FACINGS:
             group.create_task(read(facing))
-    return build_from_facades(model, readings, scale, glb.name, session.brief)
+    return build_from_facades(model, rotation, readings, scale, glb.name, session.brief)
 
 
 def build_from_facades(
     model: MeshModel,
+    rotation: NDArray[np.float64],
     readings: dict[Facing, tuple[FacadeReadingSchema, FacadeProjection]],
     scale: MeshScaleSchema,
     source: str,
@@ -261,25 +267,34 @@ def build_from_facades(
     y_range = extent("east") or extent("west")
     if x_range is None or y_range is None:
         raise ValueError("need one facade on each axis to locate the footprint")
-    outline = _footprint(
-        model, ground + SECTION_HEIGHT_M / unit, x_range, y_range, unit
-    )
-    if outline is None:
-        outline = box(x_range[0], y_range[0], x_range[1], y_range[1])
-        assumptions.append(
-            "mesh section failed; footprint is the facade bounding rectangle"
-        )
-    origin = (outline.bounds[0], outline.bounds[1])
-    ring: list[Point2] = [
-        (round((x - origin[0]) * unit, 3), round((y - origin[1]) * unit, 3))
-        for x, y in list(outline.exterior.coords)[:-1]
-    ]
-    if Polygon(ring).exterior.is_ccw is False:
-        ring.reverse()
+    outlines: list[Polygon] = []
+    for storey in storeys:
+        z_cut = ground + (storey.elevation_m + SECTION_HEIGHT_M) / unit
+        outline = _footprint(model, z_cut, x_range, y_range, unit)
+        if outline is None:
+            outline = (
+                outlines[-1]
+                if outlines
+                else box(x_range[0], y_range[0], x_range[1], y_range[1])
+            )
+            assumptions.append(
+                f"mesh section of {storey.name} failed; footprint taken from "
+                + ("the storey below" if outlines else "the facade bounding rectangle")
+            )
+        outlines.append(outline)
+    origin = (outlines[0].bounds[0], outlines[0].bounds[1])
+
+    def ring_of(outline: Polygon) -> list[Point2]:
+        ring = [
+            (round((x - origin[0]) * unit, 3), round((y - origin[1]) * unit, 3))
+            for x, y in list(outline.exterior.coords)[:-1]
+        ]
+        return ring if Polygon(ring).exterior.is_ccw else ring[::-1]
 
     walls: list[WallSchema] = []
     spaces: list[SpaceSchema] = []
-    for storey in storeys:
+    for storey, outline in zip(storeys, outlines, strict=True):
+        ring = ring_of(outline)
         for index, (start, end) in enumerate(
             zip(ring, ring[1:] + ring[:1], strict=True)
         ):
@@ -369,4 +384,15 @@ def build_from_facades(
         assumptions=assumptions,
         unresolved=unresolved,
         sources=[source],
+        reference_mesh=ReferenceMeshSchema(
+            file=REFERENCE_FILE,
+            to_building=(
+                np.diag([unit, unit, unit, 1.0])
+                @ trimesh.transformations.translation_matrix(
+                    (-origin[0], -origin[1], -ground)
+                )
+                @ rotation
+                @ Y_UP_TO_Z_UP
+            ).tolist(),
+        ),
     )

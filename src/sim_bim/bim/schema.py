@@ -46,6 +46,13 @@ class OpeningSchema(BaseSchema):
     height_source: str
 
 
+class ReferenceMeshSchema(BaseSchema):
+    file: str = Field(description="GLB file name next to the viewer, under assets/.")
+    to_building: list[list[float]] = Field(
+        description="4x4 row-major matrix from the GLB's own coordinates to building metres, z up."
+    )
+
+
 class BuildingSchema(BaseSchema):
     schema_version: Literal[2] = 2
     name: str
@@ -56,3 +63,6 @@ class BuildingSchema(BaseSchema):
     assumptions: list[str] = Field(default_factory=list)
     unresolved: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
+    reference_mesh: ReferenceMeshSchema | None = Field(
+        default=None, description="Source mesh of a mesh-mode building, for overlay."
+    )

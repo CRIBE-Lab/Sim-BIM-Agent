@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self, cast
+from typing import Final, Self, cast
 
 import numpy as np
 import trimesh
@@ -40,6 +40,9 @@ def _texture(geometry: trimesh.Trimesh) -> Image.Image | None:
     return image if isinstance(image, Image.Image) else None
 
 
+Y_UP_TO_Z_UP: Final = trimesh.transformations.rotation_matrix(np.pi / 2, (1, 0, 0))
+
+
 def load_glb(path: Path) -> MeshModel:
     """Load every mesh node of a GLB with its scene transform, converted from y up to z up.
 
@@ -50,7 +53,6 @@ def load_glb(path: Path) -> MeshModel:
         ValueError: If the file holds no triangles.
     """
     scene = cast(trimesh.Scene, trimesh.load(path, force="scene", process=False))
-    y_up_to_z_up = trimesh.transformations.rotation_matrix(np.pi / 2, (1, 0, 0))
     vertices, faces, uvs, face_texture, colours = [], [], [], [], []
     textures: list[NDArray[np.uint8]] = []
     texture_index: dict[int, int] = {}
@@ -60,7 +62,7 @@ def load_glb(path: Path) -> MeshModel:
         geometry = scene.geometry[name]
         if not isinstance(geometry, trimesh.Trimesh) or len(geometry.faces) == 0:
             continue
-        points = trimesh.transform_points(geometry.vertices, y_up_to_z_up @ transform)
+        points = trimesh.transform_points(geometry.vertices, Y_UP_TO_Z_UP @ transform)
         vertices.append(points)
         faces.append(geometry.faces + offset)
         offset += len(points)

@@ -1,6 +1,9 @@
 from pathlib import Path
+from typing import cast
 
+import numpy as np
 import pytest
+import trimesh
 from shapely.geometry import Polygon
 
 from sim_bim.bim.geometry import export_glb
@@ -24,7 +27,7 @@ def test_facades_of_the_demo_house_rebuild_its_footprint_and_window(
 ) -> None:
     path = tmp_path / "demo.glb"
     path.write_bytes(export_glb(demo_building()))
-    model = align_to_axes(load_glb(path))
+    model, rotation = align_to_axes(load_glb(path))
     readings: dict[Facing, tuple[FacadeReadingSchema, FacadeProjection]] = {}
     facings: tuple[Facing, ...] = ("south", "east")
     for facing in facings:
@@ -66,7 +69,7 @@ def test_facades_of_the_demo_house_rebuild_its_footprint_and_window(
         assert image.width > 400
 
     building = build_from_facades(
-        model, readings, MeshScaleSchema(metres_per_unit=1.0), "demo.glb", ""
+        model, rotation, readings, MeshScaleSchema(metres_per_unit=1.0), "demo.glb", ""
     )
 
     xs = [x for x, _ in building.spaces[0].polygon]
@@ -80,6 +83,12 @@ def test_facades_of_the_demo_house_rebuild_its_footprint_and_window(
         (1.5, 0.9, 2.1), abs=0.05
     )
     assert window.offset_m == pytest.approx(2.0, abs=0.25)
+    assert building.reference_mesh is not None
+    native = cast(trimesh.Trimesh, trimesh.load_scene(path).to_geometry())
+    moved = trimesh.transform_points(
+        native.vertices, np.array(building.reference_mesh.to_building)
+    )
+    assert moved.min(axis=0) == pytest.approx((0.0, 0.0, 0.0), abs=0.1)
 
 
 def test_footprint_survives_openings_at_cut_height_and_a_narrow_facade_range(

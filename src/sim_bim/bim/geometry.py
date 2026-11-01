@@ -1,6 +1,7 @@
 """Triangle meshes for a building: wall pieces around openings, floor slabs and opening panels."""
 
 import math
+from dataclasses import dataclass
 from typing import Final, Literal, cast
 
 import numpy as np
@@ -87,24 +88,33 @@ def _floor(polygon: list[tuple[float, float]], z: float) -> trimesh.Trimesh | No
     return trimesh.Trimesh(vertices=vertices, faces=faces)
 
 
-def building_meshes(building: BuildingSchema) -> dict[Category, trimesh.Trimesh]:
-    """One merged mesh per category, in metres with z up."""
+@dataclass(frozen=True)
+class ElementMesh:
+    """Triangles of one building element, in metres with z up."""
+
+    element_id: str
+    category: Category
+    storey_id: str
+    mesh: trimesh.Trimesh
+
+
+def element_meshes(building: BuildingSchema) -> list[ElementMesh]:
+    """One mesh per wall (cut around its openings), floor space and opening panel."""
     storeys = {storey.id: storey for storey in building.storeys}
     by_wall: dict[str, list[OpeningSchema]] = {}
     for opening in building.openings:
         by_wall.setdefault(opening.wall_id, []).append(opening)
-    parts: dict[Category, list[trimesh.Trimesh]] = {
-        "wall": [],
-        "floor": [],
-        "window": [],
-        "door": [],
-    }
-    walls = {wall.id: wall for wall in building.walls}
+    elements: list[ElementMesh] = []
     for wall in building.walls:
-        if wall.kind == "wall":
-            parts["wall"] += _wall_pieces(
-                wall, by_wall.get(wall.id, []), storeys[wall.storey_id].elevation_m
-            )
+        if wall.kind != "wall":
+            continue
+        pieces = _wall_pieces(
+            wall, by_wall.get(wall.id, []), storeys[wall.storey_id].elevation_m
+        )
+        if pieces:
+            mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(pieces))
+            elements.append(ElementMesh(wall.id, "wall", wall.storey_id, mesh))
+    walls = {wall.id: wall for wall in building.walls}
     for opening in building.openings:
         wall = walls[opening.wall_id]
         start, end = np.array(wall.start), np.array(wall.end)
@@ -113,19 +123,25 @@ def building_meshes(building: BuildingSchema) -> dict[Category, trimesh.Trimesh]
         a = start + unit * (opening.offset_m - opening.width_m / 2)
         b = start + unit * (opening.offset_m + opening.width_m / 2)
         category: Category = "window" if opening.kind == "window" else "door"
-        parts[category].append(
-            _box(a, b, PANEL_M, base + opening.sill_m, base + opening.head_m)
-        )
+        panel = _box(a, b, PANEL_M, base + opening.sill_m, base + opening.head_m)
+        elements.append(ElementMesh(opening.id, category, opening.storey_id, panel))
     for space in building.spaces:
         floor = _floor(space.polygon, storeys[space.storey_id].elevation_m)
         if floor is not None:
-            parts["floor"].append(floor)
+            elements.append(ElementMesh(space.id, "floor", space.storey_id, floor))
+    return elements
+
+
+def building_meshes(building: BuildingSchema) -> dict[Category, trimesh.Trimesh]:
+    """One merged, coloured mesh per category, in metres with z up."""
+    parts: dict[Category, list[trimesh.Trimesh]] = {}
+    for element in element_meshes(building):
+        parts.setdefault(element.category, []).append(element.mesh)
     meshes: dict[Category, trimesh.Trimesh] = {}
     for category, items in parts.items():
-        if items:
-            mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(items))
-            mesh.visual = ColorVisuals(mesh, face_colors=COLOURS[category])
-            meshes[category] = mesh
+        mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(items))
+        mesh.visual = ColorVisuals(mesh, face_colors=COLOURS[category])
+        meshes[category] = mesh
     return meshes
 
 

@@ -19,7 +19,8 @@ def test_viewer_embeds_model_text_as_data(tmp_path: Path) -> None:
     html = viewer_html(building)
 
     assert "<script>alert(1)" not in html
-    assert html.count("<script") == 4
+    assert html.count("<script") == 5
     paths = write_outputs(building, tmp_path)
     assert (tmp_path / "assets" / "three.min.js").stat().st_size > 100_000
+    assert (tmp_path / "assets" / "app.js").exists()
     assert paths["glb"].read_bytes()[:4] == b"glTF"

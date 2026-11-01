@@ -4,6 +4,7 @@ import asyncio
 import atexit
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Annotated
@@ -18,7 +19,7 @@ from sim_bim.agents.tracing import enable_tracing
 from sim_bim.bim.schema import BuildingSchema
 from sim_bim.config import SimBimSettings, load_settings
 from sim_bim.demo import demo_building
-from sim_bim.mesh.pipeline import MeshScaleSchema, run_mesh
+from sim_bim.mesh.pipeline import REFERENCE_FILE, MeshScaleSchema, run_mesh
 from sim_bim.viewer.render import write_outputs
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
@@ -147,6 +148,7 @@ def mesh(
     finally:
         session.save()
     _finish(log, building, {"storeys": len(building.storeys)})
+    shutil.copyfile(glb, out / "assets" / REFERENCE_FILE)
     typer.echo(f"cost {session.spent():.4f} USD")
 
 
