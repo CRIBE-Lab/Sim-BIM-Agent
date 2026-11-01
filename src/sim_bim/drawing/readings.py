@@ -121,7 +121,10 @@ class LevelMarkSchema(BaseSchema):
         description="For 'floor' and 'ceiling' marks: the storey they belong to.",
     )
     y_px: float
-    label: str = Field(description='Height label as printed, e.g. "12\'-7\\"".')
+    label: str | None = Field(
+        default=None,
+        description='Height label as printed, e.g. "12\'-7\\""; null when no height is printed.',
+    )
 
 
 class ElevationOpeningSchema(BaseSchema):

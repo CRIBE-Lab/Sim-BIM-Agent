@@ -12,7 +12,7 @@ def test_viewer_embeds_model_text_as_data(tmp_path: Path) -> None:
     building = build_from_drawings(
         "</script><script>alert(1)</script> __BUILDING_JSON__",
         [compile_plan(two_room_plan())],
-        [compile_elevation(south_elevation())],
+        [compile_elevation(south_elevation(), None)],
         sources=[],
     )
 

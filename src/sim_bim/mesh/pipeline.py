@@ -15,7 +15,7 @@ from pydantic_ai import Agent, BinaryContent, ModelRetry, RunContext
 from shapely.geometry import LineString, Polygon, box
 
 from sim_bim._share import BaseSchema, Point2
-from sim_bim.agents.reader import ElevationDeps, ink_runs, view_region
+from sim_bim.agents.reader import ElevationDeps, view_region
 from sim_bim.agents.session import Session
 from sim_bim.bim.schema import (
     BuildingSchema,
@@ -37,8 +37,7 @@ CLOSE_GAP_M: Final = 0.8
 
 FACADE_INSTRUCTIONS = """\
 You read one orthographic facade image rendered from a textured 3D building mesh. The first
-image has a grid labelled in image pixels; view_region renders any part larger and ink_runs
-finds the pixels where colours change along a segment.
+image has a grid labelled in image pixels; view_region renders any part of it larger.
 
 Report the horizontal extent of the main building (ignore trees, cars, fences and terrain),
 the ground line and the eave line of the main walls, the floor line of every storey from the
@@ -85,7 +84,7 @@ facade_agent = Agent(
     output_type=FacadeReadingSchema,
     instructions=FACADE_INSTRUCTIONS,
     name="facade_reader",
-    tools=[view_region, ink_runs],
+    tools=[view_region],
 )
 
 
@@ -152,14 +151,17 @@ def _footprint(
     if len(lines) == 0:
         return None
     segments = shapely.union_all([LineString(segment[:, :2]) for segment in lines])
-    region = box(x_range[0], y_range[0], x_range[1], y_range[1])
     closed = segments.buffer(CLOSE_GAP_M / unit).buffer(-(CLOSE_GAP_M - 0.05) / unit)
-    filled = shapely.get_parts(closed.intersection(region))
-    polygons = [Polygon(p.exterior) for p in filled if isinstance(p, Polygon)]
+    polygons = [
+        Polygon(p.exterior) for p in shapely.get_parts(closed) if isinstance(p, Polygon)
+    ]
     if not polygons:
         return None
-    largest = max(polygons, key=lambda polygon: polygon.area)
-    return largest.simplify(0.15 / unit)
+    region = box(x_range[0], y_range[0], x_range[1], y_range[1]).buffer(1.0 / unit)
+    building = max(polygons, key=lambda polygon: polygon.intersection(region).area)
+    if building.intersection(region).is_empty:
+        return None
+    return building.simplify(0.15 / unit)
 
 
 async def run_mesh(
@@ -174,22 +176,35 @@ async def run_mesh(
     span = float((model.vertices.max(0) - model.vertices.min(0)).max())
     px_per_unit = IMAGE_SIDE_PX / span
     readings: dict[Facing, tuple[FacadeReadingSchema, FacadeProjection]] = {}
-    for facing in FACINGS:
-        image, projection = await asyncio.to_thread(
-            render_facade, model, facing, px_per_unit
-        )
-        shown = render_region(image, (0, 0, image.width, image.height))
-        deps = ElevationDeps(view=image, view_id=f"facade-{facing}", storeys=[])
-        prompt = f"Facade seen from the {facing}. {session.brief}"
-        reading = await session.run_agent(
-            facade_agent,
-            f"facade-{facing}",
-            [prompt, BinaryContent(png_bytes(shown), media_type="image/png")],
-            deps,
-            model=session.reader_model,
-        )
-        readings[facing] = (reading, projection)
-        session.log.event("facade_read", facing=facing, openings=len(reading.openings))
+    gate = asyncio.Semaphore(session.settings.max_concurrent_readers)
+
+    async def read(facing: Facing) -> None:
+        async with gate:
+            image, projection = await asyncio.to_thread(
+                render_facade, model, facing, px_per_unit
+            )
+            shown = await asyncio.to_thread(
+                render_region, image, (0, 0, image.width, image.height)
+            )
+            deps = ElevationDeps(view=image, view_id=f"facade-{facing}", storeys=[])
+            reading = await session.run_agent(
+                facade_agent,
+                f"facade-{facing}",
+                [
+                    f"Facade seen from the {facing}. {session.brief}",
+                    BinaryContent(png_bytes(shown), media_type="image/png"),
+                ],
+                deps,
+                model=session.reader_model,
+            )
+            readings[facing] = (reading, projection)
+            session.log.event(
+                "facade_read", facing=facing, openings=len(reading.openings)
+            )
+
+    async with asyncio.TaskGroup() as group:
+        for facing in FACINGS:
+            group.create_task(read(facing))
     return build_from_facades(model, readings, scale, glb.name, session.brief)
 
 

@@ -46,14 +46,17 @@ class SimBimSettings(BaseSettings):
     )
     reader: RoleModelSchema = RoleModelSchema(
         model="qwen/qwen3.8-27b",
-        providers=["cerebras", "near-ai"],
+        providers=["near-ai", "chutes"],
         max_tokens=24000,
         reasoning_effort="medium",
-        max_images=2,
-        parallel_tool_calls=False,
+        max_images=4,
     )
     cost_limit_usd: Decimal = Field(default=Decimal("1.00"), gt=0)
-    max_concurrent_readers: int = Field(default=4, ge=1)
+    max_concurrent_readers: int = Field(
+        default=8,
+        ge=1,
+        description="Reader agents running at once, across sheets and views.",
+    )
     request_timeout_s: float = Field(default=600.0, gt=0)
     output_retries: int = Field(default=3, ge=0)
     request_limit: int = Field(

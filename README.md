@@ -67,7 +67,7 @@ viewer 服务只提供查看所需的文件，运行状态、消息历史和日�
 
 ```toml
 cost_limit_usd = 1.0          # 一次运行（含续跑）全部代理的费用上限
-max_concurrent_readers = 4
+max_concurrent_readers = 8
 request_limit = 200           # 一次运行全部代理的模型请求上限
 
 [coordinator]
@@ -78,12 +78,14 @@ reasoning_effort = "high"
 
 [reader]
 model = "qwen/qwen3.8-27b"
-providers = ["cerebras", "near-ai"]
+providers = ["near-ai", "chutes"]
 max_tokens = 24000
 reasoning_effort = "medium"
-max_images = 2
-parallel_tool_calls = false
+max_images = 4
+parallel_tool_calls = true
 ```
+
+读图默认使用价格低、缓存命中降价的服务商。需要更快时可改为 `providers = ["cerebras"]`，并设 `max_images = 2`、`parallel_tool_calls = false`：Cerebras 每秒约输出 1000 token，但输入单价约为 Near AI 的 25 倍，且缓存命中不降价，一次图纸转换的费用会高出一个数量级。
 
 `providers` 按顺序尝试，不会路由到列表以外的服务商。选择服务商时需要注意以下几点：
 

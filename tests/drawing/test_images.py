@@ -27,3 +27,10 @@ def test_ink_profile_finds_both_faces_of_a_wall() -> None:
     runs = ink_profile(image, (50, 50), (150, 50))
 
     assert [round(x) for x, _ in runs] == [91, 109]
+
+
+def test_ink_profile_accepts_colour_images() -> None:
+    image = Image.new("RGB", (100, 20), (255, 255, 255))
+    ImageDraw.Draw(image).rectangle([40, 0, 42, 19], fill=(10, 10, 10))
+
+    assert [round(x) for x, _ in ink_profile(image, (0, 10), (99, 10))] == [41]

@@ -179,7 +179,7 @@ def ink_profile(
     order from ``start``. Measuring across a wall gives its two faces as one
     run each when the wall is drawn as two lines, or one run for a solid wall.
     """
-    pixels = np.asarray(image)
+    pixels = np.asarray(image.convert("L"))
     length = math.dist(start, end)
     samples = max(2, int(length) + 1)
     xs = np.clip(

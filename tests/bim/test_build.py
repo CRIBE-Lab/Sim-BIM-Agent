@@ -55,7 +55,7 @@ def test_build_takes_heights_from_matched_elevation_openings() -> None:
     building = build_from_drawings(
         "two rooms",
         [compile_plan(two_room_plan())],
-        [compile_elevation(south_elevation())],
+        [compile_elevation(south_elevation(), None)],
         sources=["synthetic"],
     )
 

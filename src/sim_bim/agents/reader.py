@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Final
 
 from PIL import Image
 from pydantic import Field
@@ -62,7 +63,9 @@ image shown first, whose grid is labelled in view pixels; view_region renders an
 larger and ink_runs finds exact line positions; measure several lines in one call.
 
 Read every level mark with its printed height label and say what it marks (grade, a storey
-floor or ceiling, eave or ridge). Give the outer faces of the leftmost and rightmost main
+floor or ceiling, eave or ridge). If the view has no printed level heights, still mark the
+grade line and each storey floor line with a null label; heights then come from the sheet's
+scale. Give the outer faces of the leftmost and rightmost main
 walls. List every door and window of the main building with its storey and its outer frame
 edges in pixels. Use the storey names given in the task."""
 
@@ -219,7 +222,7 @@ async def _compile_into(
     )
 
 
-@plan_agent.tool
+@plan_agent.tool(sequential=True)
 async def set_reading(
     ctx: RunContext[PlanDeps], reading: PlanReadingSchema
 ) -> ToolReturn:
@@ -227,7 +230,7 @@ async def set_reading(
     return await _compile_into(ctx, reading)
 
 
-@plan_agent.tool
+@plan_agent.tool(sequential=True)
 async def patch_reading(
     ctx: RunContext[PlanDeps], patch: PlanPatchSchema
 ) -> ToolReturn:
@@ -255,6 +258,10 @@ def _check_plan(ctx: RunContext[PlanDeps], done: PlanDoneSchema) -> PlanDoneSche
     return done
 
 
+STRUCTURE_CHECK_PX_PER_M: Final = 100.0
+"""Stand-in scale for unlabelled elevations: the check covers structure, not heights."""
+
+
 elevation_agent = Agent(
     deps_type=ElevationDeps,
     output_type=ElevationReadingSchema,
@@ -276,8 +283,15 @@ def _check_elevation(
         raise ModelRetry(
             f"use only these storey names: {ctx.deps.storeys}; got {sorted(unknown)}"
         )
+    labelled = sum(1 for mark in reading.levels if mark.label)
+    has_grade = any(mark.role == "grade" for mark in reading.levels)
+    if labelled < 2 and not has_grade:
+        raise ModelRetry(
+            "mark the grade line, or give at least two level marks with heights"
+        )
+    structure_scale = None if labelled >= 2 else STRUCTURE_CHECK_PX_PER_M
     try:
-        compile_elevation(reading)
+        compile_elevation(reading, structure_scale)
     except CompileError as error:
         raise ModelRetry(
             "Fix these objects and return the whole reading again:\n" + str(error)

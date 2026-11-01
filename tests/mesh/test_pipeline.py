@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pytest
+from shapely.geometry import Polygon
 
 from sim_bim.bim.geometry import export_glb
+from sim_bim.bim.schema import BuildingSchema, OpeningSchema, StoreySchema, WallSchema
 from sim_bim.demo import demo_building
 from sim_bim.drawing.readings import Facing
 from sim_bim.mesh.model import load_glb
@@ -10,6 +12,7 @@ from sim_bim.mesh.pipeline import (
     FacadeOpeningSchema,
     FacadeReadingSchema,
     MeshScaleSchema,
+    _footprint,
     align_to_axes,
     build_from_facades,
 )
@@ -77,3 +80,45 @@ def test_facades_of_the_demo_house_rebuild_its_footprint_and_window(
         (1.5, 0.9, 2.1), abs=0.05
     )
     assert window.offset_m == pytest.approx(2.0, abs=0.25)
+
+
+def test_footprint_survives_openings_at_cut_height_and_a_narrow_facade_range(
+    tmp_path: Path,
+) -> None:
+
+    ring = [(0.0, 0.0), (8.0, 0.0), (8.0, 6.0), (4.0, 6.0), (4.0, 10.0), (0.0, 10.0)]
+    walls = [
+        WallSchema(
+            id=f"w{i}", storey_id="L1", start=a, end=b, thickness_m=0.2, height_m=3.0
+        )
+        for i, (a, b) in enumerate(zip(ring, ring[1:] + ring[:1], strict=True))
+    ]
+    openings = [
+        OpeningSchema(
+            id=f"o{i}",
+            storey_id="L1",
+            wall_id=f"w{i}",
+            kind="window",
+            offset_m=2.0,
+            width_m=1.2,
+            sill_m=0.8,
+            head_m=2.2,
+            height_source="test",
+        )
+        for i in range(len(walls))
+    ]
+    building = BuildingSchema(
+        name="L",
+        storeys=[StoreySchema(id="L1", name="ground", elevation_m=0.0, height_m=3.0)],
+        spaces=[],
+        walls=walls,
+        openings=openings,
+    )
+    path = tmp_path / "l.glb"
+    path.write_bytes(export_glb(building))
+    model = load_glb(path)
+
+    outline = _footprint(model, 1.2, (1.0, 7.0), (1.0, 8.0), 1.0)
+
+    assert outline is not None
+    assert outline.area == pytest.approx(Polygon(ring).area, rel=0.08)

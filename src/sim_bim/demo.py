@@ -97,6 +97,6 @@ def demo_building() -> BuildingSchema:
     return build_from_drawings(
         "Two-room demo house",
         [compile_plan(plan)],
-        [compile_elevation(elevation)],
+        [compile_elevation(elevation, None)],
         sources=["demo"],
     )

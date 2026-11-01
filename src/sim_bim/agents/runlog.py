@@ -30,6 +30,7 @@ class RunStateSchema(BaseSchema):
     plans: dict[str, PlanReadingSchema] = Field(default_factory=dict)
     elevations: dict[str, ElevationReadingSchema] = Field(default_factory=dict)
     readers: dict[str, ReaderStatusSchema] = Field(default_factory=dict)
+    rereads: list[str] = Field(default_factory=list)
     cost_usd: Decimal = Decimal(0)
     finished: bool = False
 

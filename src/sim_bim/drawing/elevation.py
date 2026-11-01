@@ -10,12 +10,13 @@ from sim_bim._share import BaseSchema
 from sim_bim.drawing.issues import CompileError, Issue
 from sim_bim.drawing.plan import CompiledPlanSchema
 from sim_bim.drawing.readings import ElevationReadingSchema, Facing
-from sim_bim.drawing.units import fit_levels, height_m
+from sim_bim.drawing.units import AxisScale, fit_levels, height_m
 
 LEVEL_RESIDUAL_M: Final = 0.08
 GAP_COST_M: Final = 1.0
 MATCH_LIMIT_M: Final = 0.6
 SIDE_PROBE_M: Final = 0.3
+OPEN_EDGE_SHARE_M: Final = 0.3
 
 
 class LevelSchema(BaseSchema):
@@ -44,30 +45,50 @@ class CompiledElevationSchema(BaseSchema):
     openings: list[FacadeOpeningSchema]
 
 
-def compile_elevation(reading: ElevationReadingSchema) -> CompiledElevationSchema:
+def compile_elevation(
+    reading: ElevationReadingSchema, sheet_px_per_m: float | None
+) -> CompiledElevationSchema:
     """Convert an elevation reading to heights above grade and facade positions.
 
-    Horizontal positions use the vertical scale, since measured drawings are
-    drawn at one scale in both directions.
+    Heights come from the labelled level marks when at least two carry a
+    printed height. Otherwise ``sheet_px_per_m``, the scale shared by the other
+    views on the same sheet, is applied from the grade line; ``None`` means no
+    such scale is known. Horizontal positions use the vertical scale, since
+    measured drawings are drawn at one scale in both directions.
 
     Raises:
-        CompileError: If the level marks do not fit one scale or an
-            opening is inverted.
+        CompileError: If the level marks do not fit one scale, neither scale
+            source is available, or an opening is inverted.
     """
     issues: list[Issue] = []
-    try:
-        scale = fit_levels(
-            [m.y_px for m in reading.levels], [m.label for m in reading.levels]
-        )
-    except ValueError as error:
-        raise CompileError([Issue("levels", str(error))]) from error
-    if scale.residual_m > LEVEL_RESIDUAL_M:
-        issues.append(
-            Issue(
-                "levels",
-                f"level marks disagree with their labels by up to {scale.residual_m:.3f} m; "
-                "re-measure y_px or re-read the labels",
+    labelled = [m for m in reading.levels if m.label]
+    grade = next((m for m in reading.levels if m.role == "grade"), None)
+    if len(labelled) >= 2:
+        try:
+            scale = fit_levels(
+                [m.y_px for m in labelled], [m.label or "" for m in labelled]
             )
+        except ValueError as error:
+            raise CompileError([Issue("levels", str(error))]) from error
+        if scale.residual_m > LEVEL_RESIDUAL_M:
+            issues.append(
+                Issue(
+                    "levels",
+                    f"level marks disagree with their labels by up to {scale.residual_m:.3f} m; "
+                    "re-measure y_px or re-read the labels",
+                )
+            )
+    elif sheet_px_per_m is not None and grade is not None:
+        scale = AxisScale(px_per_m=sheet_px_per_m, origin_px=grade.y_px, residual_m=0.0)
+    else:
+        raise CompileError(
+            [
+                Issue(
+                    "levels",
+                    "need two level marks with printed heights, or a grade line on a sheet "
+                    "whose scale is known from other views",
+                )
+            ]
         )
     left = min(reading.facade_left_px, reading.facade_right_px)
     openings: list[FacadeOpeningSchema] = []
@@ -128,10 +149,24 @@ def facade_openings(
 ) -> list[PlanFacadeOpening]:
     """Plan openings on exterior walls that face ``facing``, in viewer left-to-right order.
 
-    The facade coordinate ``u`` is measured from the building's leftmost extent
-    as seen by a viewer standing outside that side.
+    Spaces bounded by an open edge (porches, balconies) count as outside, so
+    walls facing them are facade walls. The facade coordinate ``u`` is
+    measured from the enclosed building's leftmost extent as seen by a viewer
+    standing outside that side.
     """
-    footprint = unary_union([Polygon(space.polygon) for space in plan.spaces])
+    open_edges = [
+        LineString([w.start, w.end]) for w in plan.walls if w.kind == "open_edge"
+    ]
+    enclosed = [
+        Polygon(space.polygon)
+        for space in plan.spaces
+        if not any(
+            Polygon(space.polygon).exterior.intersection(edge.buffer(0.01)).length
+            > OPEN_EDGE_SHARE_M
+            for edge in open_edges
+        )
+    ]
+    footprint = unary_union(enclosed)
     dx, dy = _OUTWARD[facing]
     min_x, min_y, max_x, max_y = footprint.bounds
     walls = {wall.id: wall for wall in plan.walls}

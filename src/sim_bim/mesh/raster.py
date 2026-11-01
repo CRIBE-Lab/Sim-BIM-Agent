@@ -11,6 +11,14 @@ from sim_bim.drawing.readings import Facing
 from sim_bim.mesh.model import MeshModel
 
 CHUNK_PIXELS: Final = 2_000_000
+BACKGROUND: Final = (190, 230, 185)
+MARGIN_SHARE: Final = 0.05
+_VIEW_DIRECTION: Final[dict[Facing, tuple[float, float, float]]] = {
+    "south": (0.0, -1.0, 0.0),
+    "north": (0.0, 1.0, 0.0),
+    "east": (1.0, 0.0, 0.0),
+    "west": (-1.0, 0.0, 0.0),
+}
 
 
 @dataclass(frozen=True)
@@ -51,15 +59,35 @@ def _screen(
             assert_never(facing)
 
 
+def _shade(model: MeshModel, facing: Facing) -> NDArray[np.float64]:
+    """Brightness factor per face, darker as faces turn away from the viewer and the light.
+
+    The range is narrow so textures that already carry lighting stay legible,
+    while untextured walls of different orientation become distinguishable.
+    """
+    triangles = model.vertices[model.faces]
+    normals = np.cross(
+        triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+    )
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    view = np.asarray(_VIEW_DIRECTION[facing])
+    light = view + np.array([0.3, 0.3, 0.8])
+    light /= np.linalg.norm(light)
+    facing_viewer = np.abs(normals @ view)
+    lit = np.abs(normals @ light)
+    return 0.6 + 0.25 * facing_viewer + 0.15 * lit
+
+
 def render_facade(
     model: MeshModel, facing: Facing, px_per_m: float
 ) -> tuple[Image.Image, FacadeProjection]:
     """Render the ``facing`` side orthographically at ``px_per_m``."""
     u, depth = _screen(model, facing)
     z = model.vertices[:, 2]
-    u_min, z_max = float(u.min()), float(z.max())
-    width = int(np.ceil((u.max() - u_min) * px_per_m)) + 1
-    height = int(np.ceil((z_max - z.min()) * px_per_m)) + 1
+    margin = MARGIN_SHARE * float(max(u.max() - u.min(), z.max() - z.min()))
+    u_min, z_max = float(u.min()) - margin, float(z.max()) + margin
+    width = int(np.ceil((u.max() + margin - u_min) * px_per_m)) + 1
+    height = int(np.ceil((z_max - z.min() + margin) * px_per_m)) + 1
     points = np.stack([(u - u_min) * px_per_m, (z_max - z) * px_per_m], axis=-1)[
         model.faces
     ]
@@ -129,7 +157,7 @@ def render_facade(
         face_buffer[pixel[nearer]] = face[nearer]
         weights_buffer[pixel[nearer]] = weights[nearer]
 
-    image = np.full((width * height, 3), 255, np.uint8)
+    image = np.full((width * height, 3), BACKGROUND, np.uint8)
     covered = np.flatnonzero(face_buffer >= 0)
     face = face_buffer[covered]
     texture_of = model.face_texture[face]
@@ -145,6 +173,9 @@ def render_facade(
         rows = np.clip(((1 - v_t) * h).astype(np.int64), 0, h - 1)
         cols = np.clip((u_t * w).astype(np.int64), 0, w - 1)
         image[covered[mask]] = texture[rows, cols]
+    image[covered] = (image[covered] * _shade(model, facing)[face, None]).astype(
+        np.uint8
+    )
     projection = FacadeProjection(
         facing=facing, px_per_m=px_per_m, u_min=u_min, z_max=z_max
     )

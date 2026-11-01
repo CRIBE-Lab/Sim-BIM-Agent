@@ -5,12 +5,18 @@ from sim_bim.drawing.elevation import (
     PlanFacadeOpening,
     align_openings,
     compile_elevation,
+    facade_openings,
 )
+from sim_bim.drawing.issues import CompileError
+from sim_bim.drawing.plan import compile_plan
 from sim_bim.drawing.readings import (
     ElevationOpeningSchema,
     ElevationReadingSchema,
     LevelMarkSchema,
+    RoomSchema,
+    WallSchema,
 )
+from tests.drawing.test_plan import px, two_room_plan
 
 
 def facade(u: float) -> FacadeOpeningSchema:
@@ -68,7 +74,7 @@ def test_compile_elevation_measures_from_grade_and_left_face() -> None:
         ],
     )
 
-    compiled = compile_elevation(reading)
+    compiled = compile_elevation(reading, None)
 
     assert compiled.px_per_m == pytest.approx(100.0)
     assert compiled.facade_width_m == pytest.approx(8.0)
@@ -76,3 +82,46 @@ def test_compile_elevation_measures_from_grade_and_left_face() -> None:
     assert (opening.u_m, opening.width_m) == pytest.approx((1.0, 1.0))
     assert (opening.sill_m, opening.head_m) == pytest.approx((0.9, 2.1))
     assert opening.storey == "first floor"
+
+
+def test_walls_behind_a_porch_face_outside() -> None:
+    reading = two_room_plan()
+    reading.walls += [
+        WallSchema(
+            id="pw", start_px=px(0.0, 0.0), end_px=px(0.0, -2.0), kind="open_edge"
+        ),
+        WallSchema(
+            id="ps", start_px=px(0.0, -2.0), end_px=px(8.0, -2.0), kind="open_edge"
+        ),
+        WallSchema(
+            id="pe", start_px=px(8.0, -2.0), end_px=px(8.0, 0.0), kind="open_edge"
+        ),
+    ]
+    reading.rooms.append(RoomSchema(id="r3", name="porch", seed_px=px(4.0, -1.0)))
+
+    south = facade_openings(compile_plan(reading), "south")
+
+    assert [row.opening_id for row in south] == ["w1"]
+
+
+def test_unlabelled_levels_use_the_sheet_scale() -> None:
+    reading = ElevationReadingSchema(
+        view_id="elev-west",
+        facing="west",
+        levels=[
+            LevelMarkSchema(name="ground", role="grade", y_px=900.0),
+            LevelMarkSchema(
+                name="upper floor", role="floor", storey="second floor", y_px=500.0
+            ),
+        ],
+        facade_left_px=100.0,
+        facade_right_px=900.0,
+        openings=[],
+    )
+
+    compiled = compile_elevation(reading, sheet_px_per_m=100.0)
+
+    upper = next(level for level in compiled.levels if level.role == "floor")
+    assert upper.height_m == pytest.approx(4.0)
+    with pytest.raises(CompileError, match="printed heights"):
+        compile_elevation(reading, None)
