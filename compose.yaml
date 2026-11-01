@@ -1,0 +1,38 @@
+name: sim-bim
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        IMAGE_TAG: ${IMAGE_TAG:-dev}
+    image: sim-bim-agent:${IMAGE_TAG:-dev}
+    env_file: .env
+    environment:
+      SIM_BIM_OTLP_ENDPOINT: http://phoenix:6006/v1/traces
+    volumes:
+      - ./inputs:/work/inputs:ro
+      - ./runs:/work/runs
+    depends_on:
+      - phoenix
+    profiles: [cli]
+
+  phoenix:
+    image: arizephoenix/phoenix:version-21.0.0-nonroot
+    environment:
+      PHOENIX_WORKING_DIR: /home/nonroot/phoenix
+    volumes:
+      - phoenix-data:/home/nonroot
+    ports:
+      - "127.0.0.1:6006:6006"
+
+  viewer:
+    image: nginx:1.31.8-alpine
+    volumes:
+      - ./runs:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  phoenix-data:

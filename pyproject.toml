@@ -13,6 +13,7 @@ dependencies = [
     "pillow>=13.0.0",
     "pydantic-ai-slim[openrouter]==2.64.0",
     "pydantic-settings>=2.16.2",
+    "scipy>=1.18.1",
     "shapely>=2.2.0",
     "trimesh>=5.2.0",
     "typer>=0.27.3",
