@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sim-BIM viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; background: #f4f2ee; }
+  #panel { position: absolute; top: 12px; left: 12px; background: #fffc; padding: 10px 12px;
+           border-radius: 6px; max-width: 320px; max-height: 90vh; overflow: auto; }
+  #panel h1 { font-size: 15px; margin: 0 0 6px; }
+  #panel label { display: block; }
+  #panel ul { padding-left: 16px; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1 id="name"></h1>
+  <div id="toggles"></div>
+  <div id="storeys"></div>
+  <details><summary>Unresolved</summary><ul id="unresolved"></ul></details>
+</div>
+<script type="application/json" id="building">__BUILDING_JSON__</script>
+<script src="assets/three.min.js"></script>
+<script src="assets/OrbitControls.js"></script>
+<script>
+const data = JSON.parse(document.getElementById("building").textContent);
+document.getElementById("name").textContent = data.name;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf4f2ee);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 2000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+sun.position.set(20, 40, 30);
+scene.add(sun);
+const groups = {};
+for (const [category, mesh] of Object.entries(data.meshes)) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(mesh.positions, 3));
+  geometry.setIndex(mesh.indices);
+  geometry.computeVertexNormals();
+  const [r, g, b, a] = mesh.colour;
+  const material = new THREE.MeshLambertMaterial({
+    color: new THREE.Color(r / 255, g / 255, b / 255), transparent: a < 255,
+    opacity: a / 255, side: THREE.DoubleSide });
+  const object = new THREE.Mesh(geometry, material);
+  scene.add(object);
+  groups[category] = object;
+  const label = document.createElement("label");
+  const box = document.createElement("input");
+  box.type = "checkbox"; box.checked = true;
+  box.onchange = () => { object.visible = box.checked; };
+  label.append(box, " " + category);
+  document.getElementById("toggles").append(label);
+}
+const storeys = document.getElementById("storeys");
+for (const storey of data.storeys) {
+  const block = document.createElement("div");
+  block.textContent = `${storey.name}: floor ${storey.elevation_m.toFixed(2)} m, height ${storey.height_m.toFixed(2)} m`;
+  const list = document.createElement("ul");
+  for (const space of data.spaces.filter(s => s.storey_id === storey.id)) {
+    const item = document.createElement("li");
+    item.textContent = `${space.name} ${space.area_m2.toFixed(1)} m²`;
+    list.append(item);
+  }
+  block.append(list);
+  storeys.append(block);
+}
+for (const text of data.unresolved) {
+  const item = document.createElement("li");
+  item.textContent = text;
+  document.getElementById("unresolved").append(item);
+}
+const bounds = new THREE.Box3().setFromObject(scene);
+const centre = bounds.getCenter(new THREE.Vector3());
+const size = bounds.getSize(new THREE.Vector3()).length();
+camera.position.copy(centre).add(new THREE.Vector3(size * 0.7, size * 0.6, size * 0.9));
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.copy(centre);
+controls.update();
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
+</script>
+</body>
+</html>
