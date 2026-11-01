@@ -1,3 +1,4 @@
-# This repository stores verified release bytes, including their line endings.
-# Do not normalize bytes on add/checkout: release-manifest.json hashes the payload.
-* -text
+* text=auto eol=lf
+*.png binary
+*.glb binary
+*.tif binary

@@ -1,21 +1,13 @@
-# Generated product files are committed. Local environments and user data are not.
 .venv/
-venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.cache/
-cache/
-runs/
-output/
-inputs/
+.ruff_cache/
 .env
 .env.*
-credentials*.json
-config.local*.json
+!.env.example
+runs/
+inputs/
+docs/_dev/
 *.log
-*.tmp
-*.bak
 .DS_Store
-Thumbs.db
-Desktop.ini

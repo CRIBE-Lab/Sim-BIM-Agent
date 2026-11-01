@@ -1,27 +1,58 @@
-# Generated from the current BIM import closure and development uv.lock.
 [project]
 name = "sim-bim-agent"
-version = "0.1.0"
-description = "Sim-BIM Agent: drawings and textured mesh to structured BIM"
+version = "0.2.0"
+description = "Convert building drawings and textured meshes into a lightweight BIM with LLM agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "anyio==4.13.0",
-    "httpcore==1.0.9",
-    "httpx==0.28.1",
-    "jsonschema==4.26.0",
-    "mcp==1.27.0",
-    "numpy==2.4.4",
-    "pillow==12.2.0",
-    "portalocker==3.2.0",
-    "pydantic==2.13.3",
-    "pyjwt[crypto]==2.12.1",
-    "python-dotenv==1.2.2",
-    "pyyaml==6.0.3",
-    "scipy==1.17.1",
-    "shapely==2.1.2",
-    "trimesh==4.11.5",
+    "loguru>=0.7.3",
+    "numpy>=2.5.4",
+    "openinference-instrumentation-pydantic-ai>=0.1.32",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.2",
+    "opentelemetry-sdk>=1.45.2",
+    "pillow>=13.0.0",
+    "pydantic-ai-slim[openrouter]==2.64.0",
+    "pydantic-settings>=2.16.2",
+    "shapely>=2.2.0",
+    "trimesh>=5.2.0",
+    "typer>=0.27.3",
 ]
 
-[tool.uv]
-package = false
+[project.scripts]
+sim-bim = "sim_bim.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.9,<1"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "sim_bim"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF", "N"]
+ignore = ["E501", "N805", "N806"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: calls the OpenRouter API and costs money"]
+addopts = "-m 'not live'"
+
+[dependency-groups]
+dev = [
+    "prek>=0.5.9",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+    "ty>=0.0.95",
+]
+
+[tool.ty.environment]
+root = ["src", "."]
+python = ".venv"
