@@ -43,8 +43,6 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["live: calls the OpenRouter API and costs money"]
-addopts = "-m 'not live'"
 
 [dependency-groups]
 dev = [

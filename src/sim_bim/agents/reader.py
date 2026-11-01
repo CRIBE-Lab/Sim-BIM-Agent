@@ -41,18 +41,17 @@ You read one floor plan into structured data. Pixel coordinates are in the view 
 first, whose grid is labelled in view pixels; view_region renders any part of it larger.
 
 Procedure:
-1. Find at least one horizontal and one vertical dimension chain. Measure tick positions
-   with ink_profile across the chain line and check them with check_chain; the residual must
-   stay below 0.05 m.
-2. Trace wall centrelines. Use ink_profile across walls: a wall drawn as two lines gives two
-   ink runs, and its centreline is midway between them. Wall ends meet other walls; small
-   gaps are closed automatically up to 0.30 m. Use kind 'open_edge' for the open sides of
-   porches and balconies so they still enclose a space.
-3. Place one seed point inside each named room, porch and balcony.
-4. Put each door and window on its host wall with its centre on the wall line.
-5. Call set_reading with the whole reading, then fix every reported issue with
-   patch_reading, changing only the objects named. Compare the preview with the drawing.
-6. When the reading compiles and matches the drawing, return your notes.
+1. Within your first three turns, call set_reading with a complete first reading taken from
+   the view: at least one horizontal and one vertical dimension chain (tick positions and
+   labels), every wall centreline, one seed point inside each named room, porch and
+   balcony, and every door and window on its host wall. Use kind 'open_edge' for the open
+   sides of porches and balconies so they still enclose a space. Wall ends within 0.30 m
+   of another wall are joined automatically.
+2. Read the compile report and the preview overlay, then correct only what they show to be
+   wrong with patch_reading. Measure where needed: ink_runs across a chain gives its tick
+   positions, across a wall drawn as two lines it gives both faces (the centreline is
+   midway), and check_chain tests a chain; pass all segments in one ink_runs call.
+3. When the reading compiles and the preview matches the drawing, return your notes.
 
 Do not invent walls or rooms that are not drawn. Record anything you cannot read in
 'unresolved'."""
@@ -60,7 +59,7 @@ Do not invent walls or rooms that are not drawn. Record anything you cannot read
 ELEVATION_INSTRUCTIONS = """\
 You read one building elevation into structured data. Pixel coordinates are in the view
 image shown first, whose grid is labelled in view pixels; view_region renders any part of it
-larger and ink_profile finds exact line positions.
+larger and ink_runs finds exact line positions; measure several lines in one call.
 
 Read every level mark with its printed height label and say what it marks (grade, a storey
 floor or ceiling, eave or ridge). Give the outer faces of the leftmost and rightmost main
@@ -118,10 +117,14 @@ def view_region(
 
 
 def ink_runs(
-    ctx: RunContext[ImageDeps], x1: float, y1: float, x2: float, y2: float
-) -> list[tuple[float, float]]:
-    """Centres of the ink lines crossed by the segment from (x1, y1) to (x2, y2), in order."""
-    return ink_profile(_image(ctx.deps), (x1, y1), (x2, y2))
+    ctx: RunContext[ImageDeps], segments: list[tuple[float, float, float, float]]
+) -> list[list[tuple[float, float]]]:
+    """Centres of the ink lines crossed by each segment (x1, y1, x2, y2), in order along it.
+
+    Measure everything you need in one call: pass all segments together.
+    """
+    image = _image(ctx.deps)
+    return [ink_profile(image, (x1, y1), (x2, y2)) for x1, y1, x2, y2 in segments]
 
 
 layout_agent = Agent(

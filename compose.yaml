@@ -21,6 +21,7 @@ services:
     image: arizephoenix/phoenix:version-21.0.0-nonroot
     environment:
       PHOENIX_WORKING_DIR: /home/nonroot/phoenix
+      PHOENIX_ENABLE_AUTH: "false"
     volumes:
       - phoenix-data:/home/nonroot
     ports:

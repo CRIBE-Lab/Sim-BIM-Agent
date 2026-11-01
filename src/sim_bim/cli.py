@@ -100,15 +100,16 @@ def run(
     resume: ResumeOption = False,
 ) -> None:
     """Convert a folder of plan and elevation sheets into a BIM and viewer."""
-
     settings = _settings(config)
     log = _open_run(out, resume)
     session = Session.create(
         settings, log, load_sheets(drawings), brief.read_text() if brief else ""
     )
-    building, report = asyncio.run(run_drawings(session))
-    session.state.finished = True
-    session.save()
+    try:
+        building, report = asyncio.run(run_drawings(session))
+        session.state.finished = True
+    finally:
+        session.save()
     _finish(log, building, report.model_dump())
     typer.echo(f"cost {session.spent():.4f} USD")
 
@@ -140,9 +141,11 @@ def mesh(
     log = _open_run(out, resume)
     session = Session.create(settings, log, {}, brief.read_text() if brief else "")
     scale = MeshScaleSchema(eave_height_m=height_m, metres_per_unit=unit_m)
-    building = asyncio.run(run_mesh(session, glb, scale))
-    session.state.finished = True
-    session.save()
+    try:
+        building = asyncio.run(run_mesh(session, glb, scale))
+        session.state.finished = True
+    finally:
+        session.save()
     _finish(log, building, {"storeys": len(building.storeys)})
     typer.echo(f"cost {session.spent():.4f} USD")
 
