@@ -14,7 +14,7 @@ type Facing = Literal["north", "south", "east", "west"]
 type OpeningKind = Literal["door", "window", "opening"]
 
 
-class ViewBoxSchema(BaseSchema):
+class LayoutViewSchema(BaseSchema):
     view_id: str = Field(description="Short unique id, e.g. 'plan-l1' or 'elev-south'.")
     kind: Literal["plan", "elevation"]
     title: str = Field(description="Title printed under the view, e.g. 'FIRST FLOOR'.")
@@ -25,16 +25,22 @@ class ViewBoxSchema(BaseSchema):
         default=None,
         description="Elevations only: the compass side of the building the view shows.",
     )
-    box_px: tuple[int, int, int, int] = Field(
-        description="left, top, right, bottom in sheet pixels, including dimension chains and level marks."
+    regions: list[int] = Field(
+        min_length=1,
+        description="Numbers of all boxed regions that belong to this view, including its "
+        "dimension chains and level marks.",
     )
 
 
 class SheetLayoutSchema(BaseSchema):
-    views: list[ViewBoxSchema]
+    views: list[LayoutViewSchema]
     north_up_in_plans: bool = Field(
         description="True when plan views are drawn with north at the top of the sheet."
     )
+
+
+class ViewBoxSchema(LayoutViewSchema):
+    box_px: tuple[int, int, int, int]
 
 
 class DimensionChainSchema(BaseSchema):

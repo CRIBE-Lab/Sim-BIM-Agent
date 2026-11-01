@@ -30,7 +30,13 @@ from sim_bim.agents.session import Session
 from sim_bim.bim.build import build_from_drawings
 from sim_bim.bim.schema import BuildingSchema
 from sim_bim.drawing.elevation import compile_elevation
-from sim_bim.drawing.images import load_sheet, png_bytes, render_region
+from sim_bim.drawing.images import (
+    candidate_regions,
+    load_sheet,
+    png_bytes,
+    render_region,
+    render_regions,
+)
 from sim_bim.drawing.issues import CompileError
 from sim_bim.drawing.plan import compile_plan
 from sim_bim.drawing.readings import PlanReadingSchema, ViewBoxSchema
@@ -245,25 +251,40 @@ async def build_building(ctx: RunContext[CoordinatorDeps]) -> str:
 
 
 async def layout_sheets(session: Session) -> None:
-    """Find the views on every sheet that has no stored layout yet."""
+    """Group each sheet's ink regions into views, reusing stored layouts."""
     for name, sheet in session.sheets.items():
+        regions = await asyncio.to_thread(candidate_regions, sheet)
         if name not in session.state.sheets:
-            prompt = f"Sheet {name}, {sheet.width}x{sheet.height} px. Locate its views."
+            overview = render_regions(sheet, regions)
+            prompt = f"Sheet {name}, {sheet.width}x{sheet.height} px, with {len(regions)} boxed regions."
             session.state.sheets[name] = await session.run_agent(
                 layout_agent,
                 f"layout-{Path(name).stem}",
-                [prompt, _overview(sheet)],
-                SheetDeps(sheet=sheet),
+                [prompt, BinaryContent(png_bytes(overview), media_type="image/png")],
+                SheetDeps(sheet=sheet, regions=regions),
                 model=session.reader_model,
             )
             session.save()
-        for box in session.state.sheets[name].views:
-            view_id = (
-                box.view_id
-                if box.view_id not in session.views
-                else f"{Path(name).stem}-{box.view_id}"
+        for view in session.state.sheets[name].views:
+            boxes = [regions[number] for number in view.regions]
+            margin = round(0.005 * max(sheet.size))
+            box_px = (
+                max(0, min(b[0] for b in boxes) - margin),
+                max(0, min(b[1] for b in boxes) - margin),
+                min(sheet.width, max(b[2] for b in boxes) + margin),
+                min(sheet.height, max(b[3] for b in boxes) + margin),
             )
-            session.views[view_id] = (name, box.model_copy(update={"view_id": view_id}))
+            view_id = (
+                view.view_id
+                if view.view_id not in session.views
+                else f"{Path(name).stem}-{view.view_id}"
+            )
+            session.views[view_id] = (
+                name,
+                ViewBoxSchema.model_validate(
+                    view.model_dump() | {"view_id": view_id, "box_px": box_px}
+                ),
+            )
 
 
 def load_sheets(input_dir: Path) -> dict[str, Image.Image]:

@@ -27,7 +27,9 @@ class LoggedOpenRouterModel(OpenRouterModel):
     breakpoints are placed on instructions, tool definitions and the latest
     message; some providers (Fireworks, Near AI) only cache with them.
     Without ``service_tier`` OpenRouter may restrict routing to flex-tier
-    endpoints and reject the pinned providers.
+    endpoints and reject the pinned providers. Leading system messages are
+    merged into one because providers that apply the official Qwen chat
+    template (Cerebras) reject a second system message.
     """
 
     def __init__(
@@ -35,7 +37,9 @@ class LoggedOpenRouterModel(OpenRouterModel):
     ) -> None:
         provider = OpenRouterProvider(api_key=api_key, app_title="Sim-BIM Agent")
         profile = OpenRouterModelProfile(
-            openrouter_supports_cache_control=True, openrouter_supports_tool_cache=True
+            openrouter_supports_cache_control=True,
+            openrouter_supports_tool_cache=True,
+            openai_chat_supports_multiple_system_messages=False,
         )
         super().__init__(config.model, provider=provider, profile=profile)
         self.role = role
@@ -91,6 +95,7 @@ class LoggedOpenRouterModel(OpenRouterModel):
             openrouter_cache_tool_definitions=True,
             openrouter_cache_messages=True,
             extra_body={"service_tier": "standard"},
+            parallel_tool_calls=self.config.parallel_tool_calls,
         )
         if self.config.reasoning_effort is not None:
             settings["openrouter_reasoning"] = {"effort": self.config.reasoning_effort}

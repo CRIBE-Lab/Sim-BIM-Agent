@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, Final, Self
+from functools import partial
+from typing import Any, Self
 
 from loguru import logger
 from PIL import Image
@@ -23,14 +24,21 @@ from sim_bim.agents.runlog import RunLog, RunStateSchema
 from sim_bim.config import SimBimSettings
 from sim_bim.drawing.readings import ViewBoxSchema
 
-KEPT_TOOL_IMAGES: Final = 2
 
+def trim_images(messages: list[ModelMessage], max_images: int) -> list[ModelMessage]:
+    """Keep the first request's images and the latest others up to ``max_images``.
 
-def trim_images(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Keep the first request's images and the latest tool images; older ones become text.
-
-    Replaced images stay replaced, so the cached prompt prefix only grows.
+    Older images become text. Replaced images stay replaced, so the cached
+    prompt prefix only grows.
     """
+    first = messages[0] if messages else None
+    first_images = sum(
+        isinstance(item, BinaryContent) and item.is_image
+        for part in (first.parts if isinstance(first, ModelRequest) else [])
+        if isinstance(part, UserPromptPart) and isinstance(part.content, list)
+        for item in part.content
+    )
+    keep = max(0, max_images - first_images)
     carriers: list[tuple[UserPromptPart | ToolReturnPart, int]] = []
     for message in messages[1:]:
         if not isinstance(message, ModelRequest):
@@ -45,7 +53,7 @@ def trim_images(messages: list[ModelMessage]) -> list[ModelMessage]:
                     for index, item in enumerate(items)
                     if isinstance(item, BinaryContent) and item.is_image
                 ]
-    for part, index in carriers[:-KEPT_TOOL_IMAGES]:
+    for part, index in carriers[: len(carriers) - keep]:
         current = part.content
         if isinstance(current, list):
             replaced = list(current)
@@ -58,10 +66,15 @@ def trim_images(messages: list[ModelMessage]) -> list[ModelMessage]:
 class RoleModel:
     model: Model
     settings: ModelSettings
+    max_images: int
 
 
 def _role(model: LoggedOpenRouterModel, timeout_s: float) -> RoleModel:
-    return RoleModel(model=model, settings=model.request_settings(timeout_s))
+    return RoleModel(
+        model=model,
+        settings=model.request_settings(timeout_s),
+        max_images=model.config.max_images,
+    )
 
 
 @dataclass
@@ -145,7 +158,9 @@ class Session:
                 request_limit=self.settings.request_limit,
             ),
             retries={"output": self.settings.output_retries, "tools": 3},
-            capabilities=[ProcessHistory(trim_images)],
+            capabilities=[
+                ProcessHistory(partial(trim_images, max_images=model.max_images))
+            ],
         ) as run:
             async for _ in run:
                 self.log.save_history(name, run.all_messages())

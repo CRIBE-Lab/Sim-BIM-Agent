@@ -11,12 +11,13 @@ from pydantic_ai.messages import (
     ModelResponse,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from sim_bim.agents.reader import PlanDeps, plan_agent
 from sim_bim.agents.runlog import RunLog
-from sim_bim.agents.session import RoleModel, Session
+from sim_bim.agents.session import RoleModel, Session, trim_images
 from sim_bim.config import SimBimSettings
 from sim_bim.drawing.readings import PlanReadingSchema
 from tests.drawing.test_plan import two_room_plan
@@ -31,7 +32,7 @@ def settings() -> SimBimSettings:
 
 
 def session(run_dir: Path, model: FunctionModel) -> Session:
-    role = RoleModel(model=model, settings={})
+    role = RoleModel(model=model, settings={}, max_images=2)
     log = RunLog(run_dir)
     return Session(
         settings=settings(),
@@ -139,3 +140,29 @@ def test_resume_continues_from_the_saved_history_and_draft(tmp_path: Path) -> No
     assert done.notes == "done"
     assert seen == [["set_reading"]]
     assert deps.compiled is not None
+
+
+def test_trim_images_respects_the_per_request_limit() -> None:
+    def image(tag: bytes) -> BinaryContent:
+        return BinaryContent(tag, media_type="image/png")
+
+    messages: list[ModelMessage] = [
+        ModelRequest(parts=[UserPromptPart(["task", image(b"overview")])]),
+        *(
+            ModelRequest(parts=[UserPromptPart([image(tag)])])
+            for tag in (b"a", b"b", b"c")
+        ),
+    ]
+
+    trimmed = trim_images(messages, max_images=2)
+
+    kept = [
+        item.data
+        for message in trimmed
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, UserPromptPart) and isinstance(part.content, list)
+        for item in part.content
+        if isinstance(item, BinaryContent)
+    ]
+    assert kept == [b"overview", b"c"]

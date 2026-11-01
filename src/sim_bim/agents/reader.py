@@ -27,14 +27,14 @@ from sim_bim.drawing.readings import (
 from sim_bim.drawing.units import fit_chain
 
 LAYOUT_INSTRUCTIONS = """\
-You locate the views on one sheet of building drawings. The first image shows the whole
-sheet with a grid labelled in sheet pixel coordinates. Use view_region to zoom in where the
-extent of a view or its title is unclear.
+You identify the views on one sheet of building drawings. The image shows the sheet with
+numbered red boxes around separate groups of ink; a single drawing may span several boxes.
+Use view_region (sheet pixel coordinates) to look closer where needed.
 
-Report every floor plan and every elevation drawing. Ignore text blocks, sections, details,
-title blocks and scale bars. Each box must include the view's dimension chains or level
-marks but not neighbouring views. Name plan storeys as printed (for example 'first floor')
-and give each elevation the compass side it shows, taken from its title."""
+Report every floor plan and every elevation drawing with the numbers of all boxes that belong
+to it, including its dimension chains and level marks. Leave out boxes holding text, titles,
+sections, details, title blocks and scale bars. Name plan storeys as printed (for example
+'first floor') and give each elevation the compass side it shows, taken from its title."""
 
 PLAN_INSTRUCTIONS = """\
 You read one floor plan into structured data. Pixel coordinates are in the view image shown
@@ -75,6 +75,7 @@ class PlanDoneSchema(BaseSchema):
 @dataclass
 class SheetDeps:
     sheet: Image.Image
+    regions: list[tuple[int, int, int, int]]
 
 
 @dataclass
@@ -136,17 +137,24 @@ layout_agent = Agent(
 def _check_layout(
     ctx: RunContext[SheetDeps], layout: SheetLayoutSchema
 ) -> SheetLayoutSchema:
-    width, height = ctx.deps.sheet.size
     problems = []
     ids = [view.view_id for view in layout.views]
     if len(set(ids)) != len(ids):
         problems.append("view ids must be unique")
+    count = len(ctx.deps.regions)
+    owner: dict[int, str] = {}
     for view in layout.views:
-        left, top, right, bottom = view.box_px
-        if not (0 <= left < right <= width and 0 <= top < bottom <= height):
-            problems.append(
-                f"{view.view_id}: box {view.box_px} is outside the {width}x{height} sheet"
-            )
+        for number in view.regions:
+            if not 0 <= number < count:
+                problems.append(
+                    f"{view.view_id}: there is no box {number}; boxes are 0..{count - 1}"
+                )
+            elif number in owner:
+                problems.append(
+                    f"box {number} is given to both {owner[number]} and {view.view_id}"
+                )
+            else:
+                owner[number] = view.view_id
         if view.kind == "plan" and not view.storey:
             problems.append(f"{view.view_id}: plans need a storey")
         if view.kind == "elevation" and not view.facing:

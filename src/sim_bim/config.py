@@ -22,10 +22,20 @@ class RoleModelSchema(BaseModel):
         gt=0, description="Caps thinking plus answer; the only reliable thinking limit."
     )
     reasoning_effort: Literal["xhigh", "high", "medium", "low", "none"] | None = None
+    max_images: int = Field(
+        default=8,
+        ge=1,
+        description="Images per request the providers accept (Cerebras: 2).",
+    )
+    parallel_tool_calls: bool = True
 
 
 class SimBimSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="SIM_BIM_", env_nested_delimiter="__")
+    model_config = SettingsConfigDict(
+        env_prefix="SIM_BIM_",
+        env_nested_delimiter="__",
+        nested_model_default_partial_update=True,
+    )
 
     openrouter_api_key: SecretStr = Field(validation_alias="OPENROUTER_API_KEY")
     coordinator: RoleModelSchema = RoleModelSchema(
@@ -39,6 +49,8 @@ class SimBimSettings(BaseSettings):
         providers=["cerebras", "near-ai"],
         max_tokens=24000,
         reasoning_effort="medium",
+        max_images=2,
+        parallel_tool_calls=False,
     )
     cost_limit_usd: Decimal = Field(default=Decimal("1.00"), gt=0)
     max_concurrent_readers: int = Field(default=4, ge=1)
@@ -74,6 +86,7 @@ def load_settings(toml_path: Path | None) -> SimBimSettings:
         model_config = SettingsConfigDict(
             env_prefix="SIM_BIM_",
             env_nested_delimiter="__",
+            nested_model_default_partial_update=True,
             toml_file=toml_path,
         )
 

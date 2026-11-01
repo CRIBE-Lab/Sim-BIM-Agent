@@ -7,6 +7,7 @@ from typing import Final
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from scipy import ndimage
 
 from sim_bim._share import Point2
 from sim_bim.drawing.plan import CompiledPlanSchema
@@ -17,6 +18,11 @@ Image.MAX_IMAGE_PIXELS = 400_000_000
 MAX_SIDE_PX: Final = 1600
 INK_THRESHOLD: Final = 128
 _FONT: Final = ImageFont.load_default(size=14)
+_LABEL_FONT: Final = ImageFont.load_default(size=36)
+REGION_CELLS: Final = 400
+REGION_GAP_CELLS: Final = 2
+MIN_REGION_SHARE: Final = 0.004
+FRAME_SHARE: Final = 0.75
 
 
 def load_sheet(path: Path) -> Image.Image:
@@ -77,6 +83,91 @@ def _clamp(
     if right - left < 4 or bottom - top < 4:
         raise ValueError(f"box {box} is empty inside an image of size {size}")
     return left, top, right, bottom
+
+
+def _longest_runs(mask: np.ndarray) -> np.ndarray:
+    """Length of the longest run of True in each row."""
+    edges = np.diff(np.pad(mask.astype(np.int8), ((0, 0), (1, 1))), axis=1)
+    rows, starts = np.nonzero(edges == 1)
+    _, ends = np.nonzero(edges == -1)
+    longest = np.zeros(mask.shape[0], dtype=np.int64)
+    np.maximum.at(longest, rows, ends - starts)
+    return longest
+
+
+def candidate_regions(
+    sheet: Image.Image, cells: int = REGION_CELLS, gap_cells: int = REGION_GAP_CELLS
+) -> list[tuple[int, int, int, int]]:
+    """Boxes around separate groups of ink on a sheet, in reading order.
+
+    The sheet is reduced to about ``cells`` cells along its long side, each
+    keeping its darkest pixel; rows and columns holding one unbroken ink run
+    longer than three quarters of the sheet (the frame) are cleared, ink within ``gap_cells`` is joined, and boxes that
+    overlap by more than half of the smaller one are merged. A drawing may
+    still span several boxes, which readers group into views.
+    """
+    pixels = np.asarray(sheet)
+    k = max(1, max(pixels.shape) // cells)
+    h, w = pixels.shape[0] // k * k, pixels.shape[1] // k * k
+    ink = pixels[:h, :w].reshape(h // k, k, w // k, k).min(axis=(1, 3)) < INK_THRESHOLD
+    ink[_longest_runs(ink) > FRAME_SHARE * ink.shape[1], :] = False
+    ink[:, _longest_runs(ink.T) > FRAME_SHARE * ink.shape[0]] = False
+    labels, _ = ndimage.label(ndimage.binary_dilation(ink, iterations=gap_cells))
+    boxes = [
+        (s[1].start * k, s[0].start * k, s[1].stop * k, s[0].stop * k)
+        for s in ndimage.find_objects(labels)
+        if s is not None
+        and (s[0].stop - s[0].start) * (s[1].stop - s[1].start)
+        >= MIN_REGION_SHARE * ink.size
+    ]
+    merged = True
+    while merged:
+        merged = False
+        for i, a in enumerate(boxes):
+            for j in range(i + 1, len(boxes)):
+                b = boxes[j]
+                overlap_w = min(a[2], b[2]) - max(a[0], b[0])
+                overlap_h = min(a[3], b[3]) - max(a[1], b[1])
+                smaller = min(
+                    (a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])
+                )
+                if (
+                    overlap_w > 0
+                    and overlap_h > 0
+                    and overlap_w * overlap_h > smaller / 2
+                ):
+                    boxes[i] = (
+                        min(a[0], b[0]),
+                        min(a[1], b[1]),
+                        max(a[2], b[2]),
+                        max(a[3], b[3]),
+                    )
+                    del boxes[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return sorted(boxes, key=lambda box: (box[1] * 10 // sheet.height, box[0]))
+
+
+def render_regions(
+    sheet: Image.Image, boxes: list[tuple[int, int, int, int]], max_side: int = 2048
+) -> Image.Image:
+    """Overview of the sheet with every candidate region boxed and numbered."""
+    shown = sheet.convert("RGB")
+    shown.thumbnail((max_side, max_side))
+    factor = shown.width / sheet.width
+    draw = ImageDraw.Draw(shown)
+    for number, (left, top, right, bottom) in enumerate(boxes):
+        corners = [left * factor, top * factor, right * factor, bottom * factor]
+        draw.rectangle(corners, outline=(220, 0, 0), width=3)
+        draw.text(
+            (corners[0] + 6, corners[1] + 4),
+            str(number),
+            fill=(220, 0, 0),
+            font=_LABEL_FONT,
+        )
+    return shown
 
 
 def ink_profile(
