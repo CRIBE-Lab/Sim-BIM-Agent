@@ -28,6 +28,8 @@ docker compose --profile cli run --rm app demo --out runs/demo
 
 `demo` 不调用模型，用内置的读图结果生成一个两房间示例。浏览器打开 <http://127.0.0.1:8080/demo/viewer.html> 查看结果，<http://127.0.0.1:6006> 是 Phoenix 追踪界面。
 
+两个端口默认只监听本机。需要从其他机器访问时，在 `.env` 中设 `BIND_ADDRESS=0.0.0.0` 后重新执行 `docker compose up -d phoenix viewer`。Phoenix 未启用鉴权，追踪中包含图纸图像和提示词，开放前应确认网络可达范围，例如只在内网或 VPN 中开放。
+
 转换图纸时，把同一建筑的图幅放进 `inputs/` 下的一个文件夹：
 
 ```bash
