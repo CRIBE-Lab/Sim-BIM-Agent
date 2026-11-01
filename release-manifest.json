@@ -1,11 +1,11 @@
 {
-  "domain_version": "domain-product-v1-100662f02d35df588767be7a",
+  "domain_version": "domain-product-v1-9541390aea8b51282b96fdc3",
   "environment": "Rebuild with uv sync --frozen --no-dev --no-install-project; .venv is not payload",
   "files": {
     ".gitattributes": "cbc2b971649ab5c06d51a6bb95a459037dd02c0549dda9c238f3a6a78fd221a0",
     ".gitignore": "f55458a77444eb71cae694858f9e5fd6c95126dcca931a1dede34afb6d4294d5",
     ".python-version": "7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d",
-    "README.md": "08f74484cc6fd7fcdac7417a5645439b5cd488167732e3ca85dee4c2530cc312",
+    "README.md": "300ecbbd09c95c2e1be0b5701dc025dda49d7eefff22efac141fdc3c82fa96db",
     "Start.cmd": "a28e00feb2d9f5fcd63976cb0482c1fdf863cd360183543e61b97069f8132706",
     "config.example.json": "99b3d0fb08659b3eccff402765a323e0bb53209579e48bc730c31a15608bf908",
     "config.mesh.example.json": "a1382b1d35be26c9c129f927f207003066b62ff00226825bbfcb362863803599",
@@ -180,7 +180,7 @@
     "src/agent_runtime/accounting.py": "e00b1efc927a4d3de7ac796a9076757f232b64339bf09d52a5796e8a143afca1",
     "src/agent_runtime/adapter.py": "807e4863966a95fbdd347a1fe3e44c5041207633b73d88321f4a122b9a5bfc0f",
     "src/agent_runtime/agent_registry.py": "8913162fda9cfe1b4e8a04932660d13a804cccf3faddf0f7f374c290b3c65bdb",
-    "src/agent_runtime/agent_versions.json": "a7a666811d2efb8914156d078240cb3c985c5938efd7eaea2db30a69ccd9ef53",
+    "src/agent_runtime/agent_versions.json": "7299c442927e38dd723ceb5f93b0c41730d1574e87eaf17fe325f62c2f63289b",
     "src/agent_runtime/anthropic.py": "6dfdf4b548232ed77cb9ba4d1a26ca737a2322cb3edfb10bccb2a1373e828e06",
     "src/agent_runtime/anthropic_binding.py": "7a7213186683cbd7a607d78f00c469a7dcec0d201cdc51ed44ac6fc2418431c1",
     "src/agent_runtime/budget.py": "e31d1fef46efd0a346fa70ae06beb056fa8074c3aa7207ddbf45c96acf224ae6",
@@ -260,7 +260,7 @@
       },
       "README.md": {
         "source": "product/README.md",
-        "source_sha256": "08f74484cc6fd7fcdac7417a5645439b5cd488167732e3ca85dee4c2530cc312",
+        "source_sha256": "300ecbbd09c95c2e1be0b5701dc025dda49d7eefff22efac141fdc3c82fa96db",
         "transform": "identity"
       },
       "Start.cmd": {
@@ -1432,7 +1432,7 @@
       "schema_version": "sim-bim-product-profile.v1"
     },
     "schema_version": "sim-bim-product-projection.v1",
-    "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc",
+    "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10",
     "source_domain_version": "domain-v169-20261101",
     "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
     "source_runtime_version": "runtime-v46-20261101",
@@ -1444,7 +1444,7 @@
       "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
     }
   },
-  "runtime_version": "runtime-product-v1-d5dfbdd64399fce2e7350035",
+  "runtime_version": "runtime-product-v1-7366aad816b95e6fc00d036c",
   "schema_version": "sim-bim-release.v1",
-  "source_commit": "75dfeed5415f1e365583f46b0f035db25ee823cc"
+  "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10"
 }

@@ -6,7 +6,7 @@ Sim-BIM Agent 结合模型的视觉理解与建筑建模工具，生成包含楼
 
 **当前版本：Windows · PNG 图纸 / GLB 网格 · JSON 模型 + HTML 查看器**
 
-[下载最新版本](https://github.com/hortonyyx/Sim-BIM-Agent/releases/latest) · [版本记录](https://github.com/hortonyyx/Sim-BIM-Agent/releases) · [反馈问题](https://github.com/hortonyyx/Sim-BIM-Agent/issues)
+[下载最新版本](https://github.com/CRIBE-Lab/Sim-BIM-Agent/releases/latest) · [版本记录](https://github.com/CRIBE-Lab/Sim-BIM-Agent/releases) · [反馈问题](https://github.com/CRIBE-Lab/Sim-BIM-Agent/issues)
 
 ## 可以做什么
 
@@ -19,7 +19,7 @@ Sim-BIM Agent 结合模型的视觉理解与建筑建模工具，生成包含楼
 
 准备 Windows、Python 3.12 和 uv，并确保终端可以运行 `uv`。
 
-1. 在 [最新版本](https://github.com/hortonyyx/Sim-BIM-Agent/releases/latest) 的附件中下载 `Sim-BIM-Agent-*.zip`。
+1. 在 [最新版本](https://github.com/CRIBE-Lab/Sim-BIM-Agent/releases/latest) 的附件中下载 `Sim-BIM-Agent-*.zip`。
 2. 解压到一个独立目录，在该目录打开 PowerShell。
 3. 安装并检查环境：
 
@@ -182,6 +182,6 @@ Sim-BIM Agent 仍在迭代中，当前通过命令与配置文件使用，支持
 
 更新时下载新版 ZIP，解压到新目录并运行 `setup.ps1`，继续使用自己的输入、配置和结果目录。进行中的任务请在原版本中完成或恢复。
 
-遇到问题可在 [Issues](https://github.com/hortonyyx/Sim-BIM-Agent/issues) 中提供版本号、输入类型、所用模型、复现步骤和错误信息；分享资料前请移除密钥及不便公开的内容。
+遇到问题可在 [Issues](https://github.com/CRIBE-Lab/Sim-BIM-Agent/issues) 中提供版本号、输入类型、所用模型、复现步骤和错误信息；分享资料前请移除密钥及不便公开的内容。
 
 查看器使用 Three.js 与 OrbitControls，许可信息见 [第三方说明](scripts/tool_scripts/vendor/README.md)。
