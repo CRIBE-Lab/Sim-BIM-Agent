@@ -146,24 +146,26 @@ def record_inference(toolkit, declaration_json: str, candidate: str | None = Non
     return _write_declaration(toolkit, declarations[0], binding)
 
 
-def record_inferences(toolkit, declarations_json: str, candidate: str | None = None) -> dict:
-    """Save bundled interpretations without an extra model round.
-
-    The complete batch is validated against one current candidate binding before
-    any record is created. Existing single-record identities and inspection stay
-    compatible; the batch is not a quality or delivery declaration.
-    """
+def prepare_inferences(toolkit, declarations_json: str, candidate: str | None = None):
     try:
         submitted = json.loads(declarations_json)
     except json.JSONDecodeError as error:
         raise ValueError(f"inferences_json is invalid JSON: {error.msg}") from error
     if not isinstance(submitted, list) or not submitted:
         raise ValueError("inferences_json must be a non-empty list of declarations")
-    declarations, binding = _prepare_declarations(toolkit, submitted, candidate)
+    return _prepare_declarations(toolkit, submitted, candidate)
+
+
+def save_prepared_inferences(toolkit, declarations, binding):
     records = [_write_declaration(toolkit, row, binding) for row in declarations]
     return {"schema_version": "bim_inference_batch_v1", "count": len(records),
             "candidate_binding": binding, "records": records,
             "claim_scope": "model_interpretation_not_factual_truth"}
+
+
+def record_inferences(toolkit, declarations_json: str, candidate: str | None = None) -> dict:
+    """Validate the entire batch against one source before creating interpretation records."""
+    return save_prepared_inferences(toolkit, *prepare_inferences(toolkit, declarations_json, candidate))
 
 
 def _binding_status(toolkit, binding) -> dict:
@@ -445,6 +447,18 @@ def register_inference_tools(server, toolkit):
     """Register inference records/audits only in the coordinator's writable run."""
     if toolkit.readonly:
         return
+
+    @server.tool()
+    def record_sim_inspection(candidate: str, inspection_json: str) -> dict:
+        """Stage batched zone/surface spatial assessments and simulation properties on a saved candidate.
+
+        Each rule uses all:true alone or intersects explicit filters. Use physical_only:true
+        for material/thickness rules on solid boundaries or filled openings. Omit null fields.
+        Read get_bim_reference("sim_inspection") for the packet schema. Repeated calls
+        update named fields only. finish_bim publishes the assessed viewer and properties.
+        """
+        from scripts.tool_scripts.bim_agent_inspection import record_inspection
+        return record_inspection(toolkit, candidate, inspection_json)
 
     @server.tool()
     def record_inference(declaration_json: str, candidate: str | None = None) -> dict:

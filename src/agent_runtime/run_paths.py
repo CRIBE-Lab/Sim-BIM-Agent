@@ -5,6 +5,12 @@ import subprocess
 from .agent_registry import load_release_manifest
 
 
+def inside_git_checkout(path: Path, *, allowed_checkout: Path | None = None) -> bool:
+    """Check resolved ancestors for both ordinary repositories and linked worktrees."""
+    return any(parent != allowed_checkout and (parent / ".git").exists()
+               for parent in (path, *path.parents))
+
+
 def resolve_run_output(output: Path, *, repository_root: Path, run_root: Path | None = None) -> Path:
     repository_root = repository_root.resolve()
     if run_root is not None and not Path(run_root).is_absolute():
@@ -27,14 +33,13 @@ def resolve_run_output(output: Path, *, repository_root: Path, run_root: Path | 
         listed = ""
     elif (repository_root / ".git").exists():
         listed = subprocess.check_output(["git", "worktree", "list", "--porcelain"],
-                                         cwd=repository_root, text=True)
+                                         cwd=repository_root, stdin=subprocess.DEVNULL, text=True)
     else:
         raise ValueError("run storage requires a Git checkout or a release manifest")
     other_trees = [Path(line[9:]).resolve() for line in listed.splitlines()
                    if line.startswith("worktree ") and Path(line[9:]).resolve() != repository_root]
     if any(target.is_relative_to(tree) for tree in other_trees):
         raise ValueError("run output must not be inside another worktree")
-    for parent in (target, *target.parents):
-        if (parent / ".git").exists() and parent != repository_root:
-            raise ValueError("run output must not be inside another worktree or repository")
+    if inside_git_checkout(target, allowed_checkout=repository_root):
+        raise ValueError("run output must not be inside another worktree or repository")
     return target

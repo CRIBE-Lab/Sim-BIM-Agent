@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 
 from scripts.tool_scripts.bim_agent_budget import fallback_selection
+from scripts.tool_scripts.bim_agent_process_reviews import drawing_handoff_review, orchestrated_drawing
 from scripts.tool_scripts.run_bim_agent import Toolkit
 
 
@@ -22,6 +23,16 @@ def _delivery_scope(manifest: dict, delivery: dict) -> dict:
             "mesh_review": {key: review[key] for key in
                 ("status", "coverage", "fidelity", "review_file", "record_sha256") if key in review},
         }
+    if orchestrated_drawing(manifest):
+        review = delivery.get("drawing_review", {})
+        return {
+            "complete_building": (review.get("status") == "current"
+                                 and review.get("coverage") == "whole_building"
+                                 and review.get("complete_building") is True),
+            "scope_basis": "drawing_model_reported_review",
+            "drawing_review": {key: review[key] for key in
+                ("status", "coverage", "fidelity", "source_model_sha256", "inputs_sha256") if key in review},
+        }
     return {"complete_building": delivery["floor_completeness"]["complete_building"]}
 
 
@@ -31,7 +42,18 @@ def attest_finished_handoff(run: Path, result: dict, candidate: str) -> dict | N
     This reads evidence only; it cannot select, finish, repair or approve a BIM.
     The caller must supply the result of its actual successful finish call.
     """
+    from src.agent.execution.handoff_transaction import handoff_reader
+    from portalocker import LockException
+    try:
+        with handoff_reader(Path(run)):
+            return _attest_finished_handoff(run, result, candidate)
+    except (OSError, ValueError, LockException):
+        return None
+
+
+def _attest_finished_handoff(run, result, candidate):
     from scripts.tool_scripts.bim_agent_saved_result import full_result_metadata
+    from scripts.tool_scripts.bim_agent_inspection import POLICY, SCHEMA, KINDS
     from src.agent.geometry.source_model import _digest
     try:
         run = Path(run).resolve()
@@ -43,6 +65,10 @@ def attest_finished_handoff(run: Path, result: dict, candidate: str) -> dict | N
         manifest = json.loads((run / "inputs.json").read_bytes())
         names = {"inputs.json", "delivery_selection.json", "delivery.json", "delivery.html",
                  f"{candidate}/source_model.json", f"{candidate}/viewer.html"}
+        inspection_name = f"{candidate}/sim_inspection.json"
+        current_policy = manifest.get("spatial_assessment_policy") == POLICY
+        if current_policy or (run / inspection_name).is_file():
+            names.add(inspection_name)
         if manifest.get("mesh_input") and (run / candidate / "mesh_review.json").is_file():
             names.add(f"{candidate}/mesh_review.json")
         if set(expected) != names or any(not (run / name).resolve().is_relative_to(run) for name in names):
@@ -54,6 +80,15 @@ def attest_finished_handoff(run: Path, result: dict, candidate: str) -> dict | N
         delivery = json.loads(contents["delivery.json"])
         source = json.loads(contents[f"{candidate}/source_model.json"])
         source_hash = _digest({k: v for k, v in source.items() if k != "source_model_sha256"})
+        if inspection_name in names:
+            inspection = json.loads(contents[inspection_name])
+            if (inspection.get("schema_version") != SCHEMA or
+                    inspection.get("source_model_sha256") != source_hash or
+                    delivery.get("sim_inspection") != inspection_name):
+                return None
+            if current_policy and any(set(inspection["spatial"][kind]) != {r["id"] for r in source[kind]}
+                                      for kind in KINDS.values()):
+                return None
         if (source.get("schema_version") not in {"source_bim_v2", "source_bim_v3"}
                 or any(row.get("source_model_sha256") != source_hash for row in (source, selection, delivery, result))
                 or any(row.get("candidate") != candidate for row in (selection, delivery))
@@ -70,10 +105,14 @@ def attest_finished_handoff(run: Path, result: dict, candidate: str) -> dict | N
             from scripts.tool_scripts.bim_agent_mesh_review import mesh_review_status
             if mesh_review_status(Toolkit(run), candidate) != delivery.get("mesh_review"):
                 return None
+        elif orchestrated_drawing(manifest):
+            review = delivery["drawing_review"]
+            declaration = {key: review[key] for key in ("coverage", "summary", "unresolved")}
+            if drawing_handoff_review(Toolkit(run), candidate, declaration) != review:
+                return None
         return {"origin": "domain_tool", "tool_name": "finish_bim", "candidate": candidate,
                 "source_model_sha256": source_hash, "artifact_sha256": expected,
-                **({"scope_basis": scope["scope_basis"], "mesh_review": scope["mesh_review"]}
-                   if manifest.get("mesh_input") else {})}
+                **{key: scope[key] for key in ("scope_basis", "mesh_review", "drawing_review") if key in scope}}
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -129,7 +168,7 @@ def finalize_building(run: Path, *, reason: str, elapsed_seconds: float) -> dict
         return {"status": "delivered", "delivery": {
             "candidate": chosen, "selection_origin": origin,
             **_delivery_scope(toolkit.manifest, delivery),
-            "report": "bim/delivery.json", "viewer": "bim/delivery.html"}}
+            "report": "bim/delivery.json", "viewer": f"bim/{chosen}/viewer.html"}}
     except (OSError, ValueError, KeyError, TypeError) as error:
         # Keep the stop reason and saved sources inspectable if handoff fails.
         return {"status": "delivery_failed", "delivery": None,
@@ -151,8 +190,14 @@ def finalize_runtime_building(engine, reason: str) -> dict:
             return {"status": "delivered", "reused_handoff": True, "completion_valid": True, "delivery": {
                 "candidate": verified["candidate"], "selection_origin": "agent_selected",
                 "complete_building": True,
-                **({"scope_basis": verified["scope_basis"], "mesh_review": verified["mesh_review"]}
-                   if "scope_basis" in verified else {}),
-                "report": "bim/delivery.json", "viewer": "bim/delivery.html"}}
+                **{key: verified[key] for key in ("scope_basis", "mesh_review", "drawing_review") if key in verified},
+                "report": "bim/delivery.json", "viewer": f"bim/{verified['candidate']}/viewer.html"}}
     return finalize_building(engine.tools.run_directory, reason=reason,
         elapsed_seconds=engine.elapsed_seconds())
+
+
+def publish_completed_model(output: Path, result: dict) -> None:
+    """Expose an explicit native finish through the same public file as DSH."""
+    if result.get("status") == "completed" and result.get("finalization", {}).get("completion_valid") is True:
+        from .viewer_publication import publish_attested_viewer
+        result["viewer"] = str(publish_attested_viewer(output / "bim", result["completion"], output))

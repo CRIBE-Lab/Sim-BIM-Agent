@@ -8,9 +8,59 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 
 POLICY = "local_drawing_reviews_v2"
+
+
+def orchestrated_drawing(manifest):
+    return manifest.get("orchestrator") is True and not manifest.get("mesh_input")
+
+
+def drawing_handoff_review(toolkit, candidate, declaration):
+    """Bind a scope judgment to the actual image set and selected saved building."""
+    manifest = toolkit.manifest
+    if not orchestrated_drawing(manifest) or not manifest.get("images"):
+        raise ValueError("drawing_review needs an orchestrator run with admitted images and no mesh")
+    if not isinstance(declaration, dict) or set(declaration) != {"coverage", "summary", "unresolved"}:
+        raise ValueError("drawing_review requires coverage, summary and unresolved")
+    coverage, summary, unresolved = (declaration[key] for key in ("coverage", "summary", "unresolved"))
+    if coverage not in ("whole_building", "partial") or not isinstance(summary, str) or not summary.strip():
+        raise ValueError("drawing_review needs whole_building or partial coverage and a nonempty summary")
+    if not isinstance(unresolved, list) or any(not isinstance(item, str) or not item.strip() for item in unresolved):
+        raise ValueError("drawing_review.unresolved must list remaining uncertainties, or []")
+
+    folder = toolkit.candidate_path(candidate)
+    source = _source(toolkit, candidate)
+    source_hash = source["source_model_sha256"]
+    report = json.loads((folder / "report.json").read_bytes())
+    if report.get("source_geometry_ready") is not True or report.get("source_model_sha256") != source_hash:
+        raise ValueError("drawing_review requires a saved candidate with current ready geometry")
+    floors = sorted(floor["id"] for floor in source["floors"])
+    if not floors or not source.get("spaces"):
+        raise ValueError("drawing_review requires modelled floors and spaces")
+    if coverage == "whole_building" and manifest.get("floor_scope_source") == "explicit_input_filenames":
+        from scripts.tool_scripts.bim_agent_budget import candidate_floor_images
+        mapped = candidate_floor_images(toolkit.run, candidate, toolkit=toolkit)
+        missing = set(manifest["floor_plan_images"]) - set(mapped)
+        if missing:
+            raise ValueError("Missing declared floor-plan coverage: " + ", ".join(sorted(missing)))
+
+    for name in manifest["images"]:
+        if Path(name).name != name or (toolkit.run / "images" / name).resolve().parent != toolkit.run / "images":
+            raise ValueError("invalid admitted drawing path")
+        toolkit.image_path(name)  # Re-hash the frozen original, including during read-only attestation.
+    building = manifest.get("building_input")
+    if building:
+        raw = (toolkit.run / "building_input.json").read_bytes()
+        if (hashlib.sha256(raw).hexdigest() != building.get("raw_sha256")
+                or json.loads(raw.decode("utf-8-sig")) != building.get("declaration")):
+            raise ValueError("admitted building declaration changed")
+    return {"status": "current", "complete_building": coverage == "whole_building",
+            "candidate": candidate, "source_model_sha256": source_hash,
+            "inputs_sha256": _hash(manifest), "floor_ids": floors,
+            "coverage": coverage, "summary": summary, "unresolved": unresolved, "fidelity": "not_evaluated"}
 
 
 def _hash(value):

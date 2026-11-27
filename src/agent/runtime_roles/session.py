@@ -82,7 +82,7 @@ COORDINATOR_TASK_SCHEMA = schema({key: value for key, value in TASK_SCHEMA["prop
 # Internal task admission still reads older saved tasks without an origin. The
 # model-facing schema requires one for every new dispatch.
 COORDINATOR_ORDINARY_TOOLS = frozenset({"inputs", "view_image", "inspect_candidate", "check_openings",
-    "view_elevation_candidate", "finish_bim"})
+    "view_elevation_candidate", "get_bim_reference", "read_candidate_items", "record_sim_inspection", "finish_bim"})
 LEVEL_REFERENCE_SCHEMA = schema({"task_id": {"type": "string"}, "elevation_id": {"type": "string"}},
                                 ("task_id", "elevation_id"))
 HEIGHT_SCHEMA = schema({"match_id": {"oneOf": [{"type": "string"},

@@ -30,7 +30,7 @@ WALL_THICKNESS_PRESETS_CM = (
 
 
 def require_wall_thickness(plan: dict) -> dict:
-    """Expand reader batches and adopt 1 cm values on every final wall."""
+    """Keep documented widths exact and regularize inferred widths on the reader's grid."""
     from src.agent.geometry.lite_bim_regularization import quantize_m
     result = copy.deepcopy(plan)
     rows = validate_wall_metadata(result)
@@ -41,6 +41,8 @@ def require_wall_thickness(plan: dict) -> dict:
                          'partition:* batches with inferred evidence when necessary. Missing: '
                          + ', '.join(missing))
     for row in rows:
+        if row['evidence_status'] == 'observed':
+            continue
         adopted = quantize_m(row['thickness_m'], .01)
         if adopted <= 0:
             raise ValueError('Wall thickness must remain positive on the 1 cm grid')

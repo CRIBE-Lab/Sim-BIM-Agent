@@ -84,7 +84,7 @@ def load_agent_registry(root: Path, registry_path: Path | None = None) -> dict[s
 
 
 def _git(root, *args):
-    return subprocess.check_output(["git", "--no-optional-locks", *args], cwd=root,
+    return subprocess.check_output(["git", "--no-optional-locks", *args], cwd=root, stdin=subprocess.DEVNULL,
                                    text=True, encoding="utf-8").strip()
 
 

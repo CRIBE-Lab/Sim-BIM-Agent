@@ -16,8 +16,11 @@ from PIL import ImageDraw
 
 def validate_mesh_frame(value):
     fields = {'mesh_sha256', 'yaw_degrees', 'translation_m', 'reason', 'source_refs'}
-    if not isinstance(value, dict) or set(value) != fields:
+    if not isinstance(value, dict):
         raise ValueError(f'mesh_frame requires exactly {sorted(fields)}')
+    if set(value) != fields:
+        raise ValueError(f'/mesh_frame requires exactly {sorted(fields)}; '
+                         f'missing {sorted(fields - value.keys())}, unknown {sorted(value.keys() - fields)}')
     if not isinstance(value['mesh_sha256'], str) or not re.fullmatch(r'[0-9a-f]{64}', value['mesh_sha256']):
         raise ValueError('mesh_frame.mesh_sha256 must identify the original GLB')
     numbers = [value['yaw_degrees']]

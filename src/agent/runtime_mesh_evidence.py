@@ -17,7 +17,7 @@ import shutil
 import time
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from scripts.tool_scripts.bim_agent_saved_result import result_metadata
 from src.agent.bim_inputs import validate_png
@@ -27,6 +27,8 @@ from src.agent_runtime.store import json_bytes
 
 
 POLICY = "mesh_worker_packet_v1"
+OBSERVER_POLICY = "building_observer_packet_v1"
+COMPARISON_REPORT = r"tool_reports/compare_mesh_source_pixels_([0-9a-f]{64})\.json"
 
 
 def _path(root, relative):
@@ -67,7 +69,7 @@ def _image_name(value):
     return value
 
 
-def _snapshot(run, candidate):
+def _snapshot(run, candidate, *, mesh=True):
     if candidate is None:
         return None, []
     _id(candidate, r"candidate_\d+|seed", "candidate ID")
@@ -80,7 +82,7 @@ def _snapshot(run, candidate):
     if (report.get("proposal_sha256") != proposal_sha
             or source.get("generation", {}).get("proposal_sha256") != proposal_sha):
         raise ValueError("worker source snapshot proposal binding changed")
-    frame = validate_mesh_frame(source.get("mesh_frame"))
+    frame = validate_mesh_frame(source.get("mesh_frame")) if mesh else None
     return {"candidate": candidate, "source_model_sha256": source_hash,
             "source_file_sha256": _sha(_path(run, files[0])), "mesh_frame": frame,
             "source_geometry_ready": report.get("source_geometry_ready") is True}, files
@@ -129,14 +131,18 @@ def _section(run, identity, mesh_sha, snapshot):
         "file_sha256": {name: _sha(_path(run, name)) for name in names}}, names
 
 
-def _parent_inputs(parent_run, candidate, observations):
+def _parent_inputs(parent_run, candidate, observations, *, multimodal=False):
     manifest = _json(_path(parent_run, "inputs.json"))
     mesh = manifest.get("mesh_input")
-    if not isinstance(mesh, dict) or mesh.get("frozen_path") != "assets/input.glb":
-        raise ValueError("mesh worker requires an admitted original GLB")
-    paths = ["assets/input.glb"]
-    if _sha(_path(parent_run, paths[0])) != mesh.get("sha256"):
-        raise ValueError("admitted original mesh changed")
+    paths = []
+    if mesh is not None:
+        if not isinstance(mesh, dict) or mesh.get("frozen_path") != "assets/input.glb":
+            raise ValueError("mesh worker requires an admitted original GLB")
+        paths.append("assets/input.glb")
+        if _sha(_path(parent_run, paths[0])) != mesh.get("sha256"):
+            raise ValueError("admitted original mesh changed")
+    elif not multimodal or observations:
+        raise ValueError("mesh observations require an admitted original GLB")
     images = manifest.get("images", {})
     if not isinstance(images, dict):
         raise ValueError("admitted image inventory must be an object")
@@ -155,8 +161,8 @@ def _parent_inputs(parent_run, candidate, observations):
                 or entry.get("declaration") != _json(path)):
             raise ValueError(f"admitted {key} changed")
         paths.append(filename)
-    snapshot, snapshot_files = _snapshot(parent_run, candidate)
-    if snapshot and snapshot["mesh_frame"]["mesh_sha256"] != mesh["sha256"]:
+    snapshot, snapshot_files = _snapshot(parent_run, candidate, mesh=mesh is not None)
+    if mesh and snapshot and snapshot["mesh_frame"]["mesh_sha256"] != mesh["sha256"]:
         raise ValueError("source snapshot belongs to a different original mesh")
     paths += snapshot_files
     evidence = {}
@@ -166,6 +172,30 @@ def _parent_inputs(parent_run, candidate, observations):
         evidence[observation] = reference
         paths += files
     return manifest, snapshot, evidence, {name: _sha(_path(parent_run, name)) for name in paths}
+
+
+def _parent_reports(parent_run, report_files, manifest, snapshot, observations):
+    reports = {}
+    for name in report_files:
+        digest = re.fullmatch(COMPARISON_REPORT, name).group(1)
+        path = _path(parent_run, name)
+        if path.stat().st_size > 4 * 1024 * 1024 or _sha(path) != digest:
+            raise ValueError("parent report exceeds 4 MiB or differs from its content-addressed filename")
+        report = _json(path)
+        observation = report.get("observation")
+        if observation not in observations or snapshot is None:
+            raise ValueError("parent report requires its matching candidate and explicit observation_ids")
+        identity = _id(report.get("evidence_id"), r"correspondence_\d+", "mesh comparison ID")
+        _comparison_reference({"source_snapshot": snapshot, "mesh_sha256": manifest["mesh_input"]["sha256"]},
+            parent_run, {"evidence_id": identity, "evidence_file": f"mesh_evidence/{identity}.json",
+                         "evidence_sha256": digest, "details_file": name, "details_sha256": digest,
+                         "observation": observation})
+        reports[name] = {"sha256": digest, "producer": "compare_mesh_source_pixels",
+            "evidence_id": identity, "candidate": snapshot["candidate"], "observation": observation,
+            "sample_count": len(report["samples"]), "read": {"tool": "read_candidate_items",
+                "arguments": {"candidate": "", "collection": "report", "report_file": name,
+                              "json_pointer": "/samples"}}}
+    return reports
 
 
 def _request(task_id, question, notes, candidate, observation_ids, timing, image_view_ids=()):
@@ -202,22 +232,36 @@ def _request(task_id, question, notes, candidate, observation_ids, timing, image
 
 
 def prepare_mesh_worker_packet(parent_run, child_run, *, task_id, question, notes=(),
-                               candidate=None, observation_ids=(), timing=None, image_view_ids=(), parent_store=None):
+                               candidate=None, observation_ids=(), timing=None, image_view_ids=(), parent_store=None,
+                               multimodal=False, report_files=()):
     """Copy only admitted assets and one optional source snapshot; resume is immutable."""
     parent_run, child_run = Path(parent_run).resolve(), Path(child_run).resolve()
     if child_run == parent_run or parent_run.is_relative_to(child_run):
         raise ValueError("worker workspace must be separate from its parent")
     request = _request(task_id, question, notes, candidate, observation_ids, timing, image_view_ids)
+    if not isinstance(report_files, (list, tuple)) or len(report_files) > 3:
+        raise ValueError("supply at most 3 parent comparison report files")
+    if report_files:
+        if not multimodal:
+            raise ValueError("parent reports require an orchestrator worker")
+        for name in report_files:
+            _id(name, COMPARISON_REPORT, "content-addressed parent comparison report file")
+        if len(set(report_files)) != len(report_files):
+            raise ValueError("parent report files must be distinct")
+        request["report_files"] = list(report_files)
     packet_path = _path(child_run, "mesh_worker_packet.json")
     if packet_path.exists():
         packet = _json(packet_path)
-        if packet.get("request") != request:
+        if packet.get("request") != request or packet["policy"] != (OBSERVER_POLICY if multimodal else POLICY):
             raise ValueError("worker task input or timing changed on resume")
         verify_mesh_worker_packet(packet, parent_run, child_run, parent_store=parent_store)
         return packet
     if child_run.exists() and any(child_run.iterdir()):
         raise ValueError("new mesh worker workspace must be empty")
-    manifest, snapshot, observations, files = _parent_inputs(parent_run, candidate, request["observation_ids"])
+    manifest, snapshot, observations, files = _parent_inputs(parent_run, candidate, request["observation_ids"],
+                                                            multimodal=multimodal)
+    reports = _parent_reports(parent_run, report_files, manifest, snapshot, observations)
+    files.update({name: report["sha256"] for name, report in reports.items()})
     from src.agent.runtime_mesh_image_views import prepare_image_views, bind_parent_receipts
     view_started = time.perf_counter()
     input_views, view_files, pictures = prepare_image_views(parent_run, image_view_ids, manifest)
@@ -244,17 +288,24 @@ def prepare_mesh_worker_packet(parent_run, child_run, *, task_id, question, note
         target.write_bytes(png)
     child_manifest = {key: copy.deepcopy(manifest[key]) for key in
         ("images", "image_kind", "mesh_input", "building_input",
-         "architectural_modelling_policy", "vertical_continuity_policy") if key in manifest}
-    child_manifest.update(input_mode="runtime_mesh_worker_observation", scope=question,
+         "architectural_modelling_policy", "vertical_continuity_policy", "blocks", "locale") if key in manifest}
+    child_manifest.update(input_mode="runtime_building_observer" if multimodal else "runtime_mesh_worker_observation", scope=question,
         floor_plan_images=[], floor_scope_source="not_declared", **request["timing"])
     _path(child_run, "inputs.json").write_bytes(json_bytes(child_manifest))
-    packet = {"policy": POLICY, "request": request, "parent_run": str(parent_run),
+    packet = {"policy": OBSERVER_POLICY if multimodal else POLICY, "request": request, "parent_run": str(parent_run),
               "child_run": str(child_run), "input_manifest_sha256": parent_manifest_sha,
-              "mesh_sha256": manifest["mesh_input"]["sha256"], "source_snapshot": snapshot,
+              "mesh_sha256": manifest.get("mesh_input", {}).get("sha256"), "source_snapshot": snapshot,
               "parent_file_sha256": files, "child_file_sha256": {**files,
                   "inputs.json": _sha(_path(child_run, "inputs.json"))},
               "observations": observations, "image_names": sorted(manifest.get("images", {})),
               "fidelity": "not_evaluated"}
+    if reports:
+        packet["parent_reports"] = reports
+    if multimodal:
+        packet["building_scope"] = manifest["scope"]
+        packet.update({key: manifest[key] for key in ("blocks", "locale") if key in manifest})
+        packet["user_declaration"] = manifest.get("building_input", {}).get("declaration")
+        packet["image_kind"] = manifest.get("image_kind")
     if input_views:
         packet["input_views"] = input_views
         packet["input_view_preparation_seconds"] = time.perf_counter() - view_started
@@ -267,7 +318,7 @@ def prepare_mesh_worker_packet(parent_run, child_run, *, task_id, question, note
 
 
 def _verify_child(packet, child_run):
-    if (packet.get("policy") != POLICY or packet.get("packet_sha256") != _digest(
+    if (packet.get("policy") not in {POLICY, OBSERVER_POLICY} or packet.get("packet_sha256") != _digest(
             {k: v for k, v in packet.items() if k != "packet_sha256"})
             or packet.get("child_run") != str(Path(child_run).resolve())
             or _json(_path(child_run, "mesh_worker_packet.json")) != packet):
@@ -284,7 +335,13 @@ def verify_mesh_worker_packet(packet, parent_run, child_run, *, parent_store=Non
             or _sha(_path(parent_run, "inputs.json")) != packet["input_manifest_sha256"]):
         raise ValueError("parent mesh input manifest changed")
     request = packet["request"]
-    manifest, snapshot, observations, files = _parent_inputs(parent_run, request["candidate"], request["observation_ids"])
+    manifest, snapshot, observations, files = _parent_inputs(parent_run, request["candidate"], request["observation_ids"],
+                                                            multimodal=packet["policy"] == OBSERVER_POLICY)
+    if request.get("report_files") or "parent_reports" in packet:
+        reports = _parent_reports(parent_run, request.get("report_files", ()), manifest, snapshot, observations)
+        if reports != packet.get("parent_reports"):
+            raise ValueError("parent report bindings changed")
+        files.update({name: report["sha256"] for name, report in reports.items()})
     if request.get("image_view_ids"):
         from src.agent.runtime_mesh_image_views import prepare_image_views, bind_parent_receipts
         views, view_files, _ = prepare_image_views(parent_run, request["image_view_ids"], manifest)
@@ -304,7 +361,8 @@ def _evidence(packet, child_run, kind, identity):
             raise ValueError("image is outside the worker packet")
         relative = f"images/{identity}"
         size = validate_png(_path(child_run, relative))
-        return {"kind": kind, "id": identity, "origin": "auxiliary_input_image",
+        return {"kind": kind, "id": identity,
+                "origin": "admitted_input_image" if packet["policy"] == OBSERVER_POLICY else "auxiliary_input_image",
                 "image_file": relative, "resolution_px": {"width": size[0], "height": size[1]},
                 "file_sha256": {relative: _sha(_path(child_run, relative))}}
     if kind == "mesh_observation":
@@ -443,6 +501,25 @@ class MeshWorkerAnswer(_AnswerModel):
     uncertain: tuple[MeshUncertainty, ...] = ()
 
 
+class DrawingReading(_AnswerModel):
+    """Structured geometry or labels read from one admitted source drawing."""
+    image: str = Field(description="Exact filename in packet.image_names that you viewed as image evidence.")
+    based_on_observation_ids: tuple[str, ...] = Field(min_length=1, description=(
+        "IDs from directly_seen with evidence_kind='image' and evidence_id equal to this filename."))
+    coordinate_frame: str = Field(min_length=1)
+    data: dict[str, JsonValue] = Field(min_length=1)
+
+
+class ObserverAnswer(MeshWorkerAnswer):
+    drawing_readings: tuple[DrawingReading, ...] = Field(default=(), description=(
+        "Optional for original drawing PNGs. Omit for mesh-only findings, including rendered views "
+        "and section cuts. Report their geometry in directly_seen or interpretations with mesh references."))
+
+
+def answer_type(packet):
+    return ObserverAnswer if packet.get("policy") == OBSERVER_POLICY else MeshWorkerAnswer
+
+
 def _receipts(store):
     result = {}
     for event in store.events:
@@ -574,12 +651,37 @@ def mesh_worker_measurements(call_ids, packet, store, child_run):
     return results
 
 
+def _parent_report_reads(packet, store):
+    """Record the exact delegated pages returned by the ordinary read-only report tool."""
+    pages = []
+    for event in store.events:
+        call = event.payload
+        if (call.event_type != "tool_execution" or call.tool_name != "read_candidate_items"
+                or call.outcome != "succeeded"):
+            continue
+        name = call.full_arguments.get("report_file")
+        reference = packet["parent_reports"].get(name)
+        if reference is None or call.full_arguments.get("collection") != "report":
+            continue
+        raw = store.resolve(call.raw_result)
+        if raw.get("isError"):
+            continue
+        page = result_metadata(raw)
+        if page.get("report_file") != name or page.get("sha256") != reference["sha256"]:
+            raise ValueError("returned parent report page differs from its admitted identity")
+        pages.append({"tool_execution_event_id": event.event_id, "tool_call_id": call.call_id,
+                      "observation": reference["observation"], "sha256": reference["sha256"],
+                      "read_arguments": call.full_arguments})
+    return pages
+
+
 def hydrate_mesh_worker_answer(answer, packet, store, child_run):
     """Attach trusted references; free-text numeric statements remain model statements."""
     _verify_child(packet, child_run)
     if store.task_id != packet["request"]["task_id"]:
         raise ValueError("mesh answer belongs to a different worker task")
-    value = MeshWorkerAnswer.model_validate_json(answer) if isinstance(answer, str) else MeshWorkerAnswer.model_validate(answer)
+    schema = answer_type(packet)
+    value = schema.model_validate_json(answer) if isinstance(answer, str) else schema.model_validate(answer)
     seen_ids = [row.observation_id for row in value.directly_seen]
     for values in (seen_ids, [r.interpretation_id for r in value.interpretations], [r.uncertainty_id for r in value.uncertain]):
         if len(set(values)) != len(values):
@@ -595,9 +697,9 @@ def hydrate_mesh_worker_answer(answer, packet, store, child_run):
             resolution = reference["resolution_px"]
             if not (0 <= x0 < x1 <= resolution["width"] and 0 <= y0 < y1 <= resolution["height"]):
                 raise ValueError("worker observation box exceeds its evidence image")
-            if reference.get("prefetched_views"):
+            if row.evidence_kind == "image" and (packet["policy"] == OBSERVER_POLICY or reference.get("prefetched_views")):
                 regions = [view["view"]["box_original_pixels"] for view in
-                           (*reference["prefetched_views"], *reference.get("view_receipts", []))]
+                           (*reference.get("prefetched_views", ()), *reference.get("view_receipts", ()))]
                 if not any(a <= x0 < x1 <= c and b <= y0 < y1 <= d for a, b, c, d in regions):
                     raise ValueError("worker box must use ORIGINAL pixels inside a supplied image view")
         output = {"observation_id": row.observation_id, "statement": row.statement,
@@ -626,11 +728,28 @@ def hydrate_mesh_worker_answer(answer, packet, store, child_run):
         related = row.based_on_observation_ids if isinstance(row, MeshInterpretation) else row.related_observation_ids
         if set(related) - set(seen_ids):
             raise ValueError("mesh interpretation or uncertainty cites an unknown observation")
+    readings = getattr(value, "drawing_readings", ())
+    invalid_readings = []
+    for index, reading in enumerate(readings):
+        supported_ids = {row.observation_id for row in value.directly_seen
+                         if row.evidence_kind == "image" and row.evidence_id == reading.image}
+        invalid_ids = sorted(set(reading.based_on_observation_ids) - supported_ids)
+        if invalid_ids:
+            invalid_readings.append(f"drawing_readings[{index}] image={reading.image!r}, "
+                                    f"unsupported observation IDs={invalid_ids!r}")
+    if invalid_readings:
+        raise ValueError("; ".join(invalid_readings) + ". Each drawing reading requires directly_seen "
+            "observations with evidence_kind='image' and evidence_id equal to the viewed original PNG "
+            "filename from packet.image_names. Mesh renders and section cuts are mesh evidence. Omit "
+            "unsupported drawing_readings and retain their supported geometry in directly_seen or "
+            "interpretations with the original mesh references.")
     return {"task_id": packet["request"]["task_id"], "packet_sha256": packet["packet_sha256"],
             "run_id": store.run_id, "input_manifest_sha256": packet["input_manifest_sha256"],
             "mesh_sha256": packet["mesh_sha256"], "source_snapshot": packet["source_snapshot"],
             "directly_seen": observations, "interpretations": [r.model_dump(mode="json") for r in value.interpretations],
             "uncertain": [r.model_dump(mode="json") for r in value.uncertain],
+            **({"drawing_readings": [row.model_dump(mode="json") for row in readings]} if readings else {}),
+            **({"parent_report_reads": _parent_report_reads(packet, store)} if packet.get("parent_reports") else {}),
             "fidelity": "not_evaluated", "candidate_mutation": False}
 
 

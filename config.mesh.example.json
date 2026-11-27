@@ -3,8 +3,8 @@
   "batch_id": "my-textured-building",
   "approval_required_before_launch": true,
   "maximum_seconds_per_case": null,
-  "input_root": "D:/Sim-BIM-Agent/user-inputs",
-  "run_root": "D:/Sim-BIM-Agent/runs",
+  "input_root": "D:/Sim-BIM-Data/inputs",
+  "run_root": "D:/Sim-BIM-Data/runs",
   "cases": [
     {
       "case_id": "my-textured-building",

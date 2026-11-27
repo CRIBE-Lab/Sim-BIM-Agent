@@ -177,7 +177,7 @@ def source_grid_report(source, grid_step_m):
 
 
 def reject_source_proposal(toolkit, proposal, *, plan_assembly=None, parent=None,
-                           architectural_regularization=None):
+                           architectural_regularization=None, operations=None, confirmed_offsets=None):
     """Prepare a source-only hard-rule refusal before allocating a candidate.
 
     The caller is Toolkit.build. This helper never edits a source or the input
@@ -214,6 +214,10 @@ def reject_source_proposal(toolkit, proposal, *, plan_assembly=None, parent=None
     if parent is not None:
         for regularization in candidate_reports(toolkit, parent):
             report = apply_cross_storey_skip_policy(report, regularization)
+    if confirmed_offsets is not None and toolkit.manifest.get("model_revision"):
+        from scripts.tool_scripts.bim_agent_partition_precision import apply_confirmed_offsets, bind_partition_offsets
+        confirmed_offsets.extend(bind_partition_offsets(toolkit, parent, source, operations, report))
+        report = apply_confirmed_offsets(report, confirmed_offsets)
     report = classify_source_precision(report, toolkit.manifest)
     grid = None
     if grid_step is not None and adopted_precision is None:
@@ -229,6 +233,10 @@ def reject_source_proposal(toolkit, proposal, *, plan_assembly=None, parent=None
                           counts=dict(Counter(row["type"] for row in report["items"])))
     if not report["items"]:
         return None
+    owners = {boundary["id"]: boundary["space_id"] for boundary in source["boundaries"]}
+    for item in report["items"]:
+        for line in item.get("lines", []):
+            line["source_space_ids"] = sorted({owners[bid] for bid in line.get("boundary_ids", []) if bid in owners})
     folder = toolkit.run / "geometry_rejections"
     folder.mkdir(exist_ok=True)
     attempt = folder / f"attempt_{len(list(folder.glob('attempt_*'))) + 1:03d}"

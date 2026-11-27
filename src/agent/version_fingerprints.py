@@ -24,7 +24,9 @@ from src.agent.runtime_roles.readers import ReaderTools
 from src.agent.runtime_roles.elevation import ElevationReaderTools, ELEVATION_COORDINATES
 from src.agent.runtime_roles.coordinates import READER_COORDINATES
 from src.agent.runtime_roles.session import RoleSession
-from src.agent.runtime_mesh_workers import mesh_worker_tool_specs, mesh_worker_task_payload, WORKER_GUIDANCE
+from src.agent.runtime_mesh_workers import (
+    mesh_worker_tool_specs, mesh_worker_task_payload, observer_tool_specs, OBSERVER_GUIDANCE, WORKER_GUIDANCE,
+)
 from scripts.tool_scripts.bim_agent_guidance import MESH_WORKERS
 from src.agent_runtime.mcp_tools import McpToolClient
 from src.agent_runtime.store import EventStore
@@ -150,9 +152,16 @@ async def domain_fingerprints(root=ROOT):
             raw_catalogs[mode] = tools
             catalogs[mode] = _hash(tools)
             projections = tools
-            guides = {f"images={kind}": build_guide(images=kind, mesh=mesh)
+            guides = {f"images={kind}": build_guide(images=kind, mesh=mesh, sim_inspection=True)
                       for kind in (None, "drawings", "mesh_views", "photos", "unknown")}
             modes[f"single_model/{mode}"] = _fingerprint(projections, guides, tasks)
+            if mode.startswith("coordinator"):
+                for host in ("dsh", "native"):
+                    modes[f"orchestrator/{host}/{mode}"] = _fingerprint(
+                        [*projections, *observer_tool_specs(dsh=host == "dsh")],
+                        build_guide(images="drawings", mesh=mesh, orchestrator=True, sim_inspection=True), tasks)
+            else:
+                modes[f"orchestrator/{mode}"] = _fingerprint(projections, OBSERVER_GUIDANCE, tasks)
             if mode == "coordinator_mesh":
                 modes["mesh_workers/coordinator"] = _fingerprint(
                     [*projections, *mesh_worker_tool_specs()],

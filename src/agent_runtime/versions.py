@@ -66,6 +66,12 @@ def model_configuration(route: dict, parameters: dict) -> dict:
 
 
 def run_model_configuration(store, *, route, parameters):
+    if route.get("orchestrator"):
+        models = {"coordinator": model_configuration(route, parameters)}
+        worker = route.get("worker_model_configuration")
+        if worker:
+            models["worker"] = model_configuration(worker, worker["parameters"])
+        return "orchestrator", models
     configured = route.get("roles", {}).get("roles")
     if configured:
         models = {}

@@ -8,12 +8,12 @@ def default_output_tokens(model: str, *, fallback: int = 2048) -> int:
     return profile.recommended_min_output_tokens or fallback
 
 
-def validate_output_limit(model: str, output_tokens: int, *, reason: str | None = None) -> dict:
+def validate_output_limit(model: str, output_tokens: int, *, reason: str | None = None, profile=None) -> dict:
     if type(output_tokens) is not int or output_tokens <= 0:
         raise ValueError("explicit positive output token cap required")
     if reason is not None and (not isinstance(reason, str) or not reason.strip()):
         raise ValueError("low output limit override requires a non-empty reason")
-    profile = get_model_profile(model)
+    profile = profile or get_model_profile(model)
     minimum = profile.recommended_min_output_tokens
     below = minimum is not None and output_tokens < minimum
     if below and reason is None:

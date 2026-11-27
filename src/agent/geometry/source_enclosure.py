@@ -29,6 +29,19 @@ _SPACE_ENCLOSURES = {"enclosed", "semi_open", "open"}
 _CONDITIONS = {"open", "unknown"}
 
 
+class ReciprocalEnclosureError(ValueError):
+    """Carry all nonreciprocal contacts from the same frozen source geometry."""
+
+    def __init__(self, base_sha256, conflicts):
+        first = conflicts[0]
+        super().__init__(
+            f"source enclosure: boundary {first['boundary_id']}: open shared region requires matching "
+            f"open declaration on {first['counterpart_id']} ({len(conflicts)} boundary pairs)"
+        )
+        self.base_sha256 = base_sha256
+        self.conflicts = conflicts
+
+
 def _fail(message: str) -> None:
     raise ValueError(f"source enclosure: {message}")
 
@@ -219,6 +232,7 @@ def _validate_reciprocal_openings(source: dict, entries_by_boundary: dict[str, l
     regions never take part in this relation and cannot establish connectivity.
     """
     connections = []
+    conflicts = {}
     for bid, entries in entries_by_boundary.items():
         open_shape = _declared_open_shapes(entries)
         if open_shape.is_empty:
@@ -252,9 +266,14 @@ def _validate_reciprocal_openings(source: dict, entries_by_boundary: dict[str, l
                     # ring; that hole is real physical enclosure and must survive.
                     world, other_part = _map_boundary_part(part, frame, other)
                     if not other_open.buffer(EPS).covers(other_part):
-                        _fail(
-                            f"boundary {bid}: open shared region requires matching open declaration on {other_id}"
-                        )
+                        if (other_id, bid) in conflicts:
+                            opposite, own = conflicts[(other_id, bid)]
+                        else:
+                            own, opposite = conflicts.setdefault((bid, other_id), (set(), set()))
+                        own.update(entry["index"] for entry in entries if entry["condition"] == "open"
+                                   and entry["shape"].intersection(part).area > EPS ** 2)
+                        opposite.update(entry["index"] for entry in entries_by_boundary.get(other_id, []))
+                        continue
                     connections.append({
                         "boundary_id": bid,
                         "space_ids": [boundary["space_id"], other["space_id"]],
@@ -272,6 +291,14 @@ def _validate_reciprocal_openings(source: dict, entries_by_boundary: dict[str, l
                 "condition": "open",
                 **row,
             })
+    if conflicts:
+        rows = [
+            {"boundary_id": bid, "declarations": [f"/enclosure_declaration/boundaries/{i}" for i in sorted(own)],
+             "counterpart_id": other, "counterpart_declarations": [
+                 f"/enclosure_declaration/boundaries/{i}" for i in sorted(opposite)]}
+            for (bid, other), (own, opposite) in conflicts.items()
+        ]
+        raise ReciprocalEnclosureError(source["source_model_sha256"], rows)
     return connections
 
 
@@ -361,7 +388,7 @@ def apply_source_enclosure(base_source: dict, declaration: dict | None) -> dict:
                     _fail(f"boundary {bid}: whole declaration vertices must equal its full parent boundary")
             vertices = copy.deepcopy(boundary["vertices"])
             shape = frame["parent"]
-        entries_by_boundary[bid].append({"boundary_id": bid, "condition": condition, "scope": scope,
+        entries_by_boundary[bid].append({"boundary_id": bid, "index": index, "condition": condition, "scope": scope,
                                          "vertices": vertices, "shape": shape,
                                          **({'holes': copy.deepcopy(boundary['holes'])}
                                             if scope == 'whole' and boundary.get('holes') else {}), **evidence})

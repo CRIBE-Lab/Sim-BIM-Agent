@@ -1,0 +1,13 @@
+# DeepSeek Harness headless overlay for one admitted Sim-BIM run on Windows.
+- insert:
+    - id: sim-bim-domain
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: sim_bim
+        transport: stdio
+        command: !!js process.env.SIM_BIM_REPO + '/.venv/Scripts/python.exe'
+        cwd: !!js process.env.SIM_BIM_REPO
+        args: !!js >-
+          ['-B', '-X', 'utf8', 'scripts/tool_scripts/run_bim_agent.py', 'serve',
+           process.env.SIM_BIM_RUN, ...(process.env.SIM_BIM_WRITER === '1' ? [] : ['--readonly'])]
+        failOnStartupError: true

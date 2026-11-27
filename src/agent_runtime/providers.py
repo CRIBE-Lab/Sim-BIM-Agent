@@ -1,6 +1,7 @@
 """Explicit provider parameters; subscription routes never fall back to billing."""
 
 from pathlib import Path
+import re
 
 
 GLM_SUBSCRIPTION = "glm-subscription"
@@ -26,11 +27,19 @@ def is_deepseek_route(provider: str, model: str) -> bool:
 GLM_SUBSCRIPTION_PROVIDERS = (GLM_SUBSCRIPTION, GLM_SUBSCRIPTION_ANTHROPIC)
 SUBSCRIPTION_PROVIDERS = (*GLM_SUBSCRIPTION_PROVIDERS, CHATGPT_SUBSCRIPTION, OPENCODE_GO)
 LIVE_PROVIDERS = ("paratera", DEEPSEEK, *SUBSCRIPTION_PROVIDERS)
+
+
+def is_custom_provider(provider):
+    return isinstance(provider, str) and re.fullmatch(r"custom-[0-9a-f]{32}", provider) is not None
 # Explicitly admitted reasoning levels for the GLM Coding Plan adapters.
 SUBSCRIPTION_REASONING_EFFORTS = ("low", "medium", "high", "max")
 
 
 def validate_provider_model(provider: str, model: str) -> None:
+    if is_custom_provider(provider):
+        if not isinstance(model, str) or not model.strip() or any(ord(c) < 32 for c in model):
+            raise ValueError("custom connections require a nonempty model ID")
+        return
     if provider == OPENCODE_GO:
         from .opencode_go import model_contract
         model_contract(model)
@@ -94,6 +103,11 @@ def provider_parameters(provider: str, *, output_tokens: int,
                         temperature: float | None = None,
                         thinking: bool = True, reasoning_effort: str | None = None,
                         model: str | None = None) -> dict:
+    if is_custom_provider(provider):
+        validate_provider_model(provider, model)
+        if type(output_tokens) is not int or output_tokens < 1:
+            raise ValueError("custom connection output allowance must be positive")
+        return {"max_tokens": output_tokens}
     if provider == DEEPSEEK or (isinstance(model, str) and "deepseek" in model.casefold()):
         validate_provider_model(provider, model)
     if is_deepseek_route(provider, model):

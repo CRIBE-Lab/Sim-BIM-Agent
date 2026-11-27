@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Sim-BIM</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <h1 class="brand"><img src="/static/mark.svg" alt="" width="30" height="30"><span>Sim-BIM</span></h1>
+      <div class="workspace-cell">
+        <label for="workspace" data-t="workspace">工作区</label>
+        <button class="select-button" id="workspace" type="button"><i data-icon="folder"></i><span class="value" id="workspace-value"></span><i data-icon="chevron"></i></button>
+      </div>
+      <div class="header-tools">
+        <button id="settings" class="button" type="button"><i data-icon="settings"></i><span data-t="settings">模型设置</span></button>
+        <div class="language" role="group" data-label="language">
+          <button type="button" lang="zh-CN" data-lang="zh-CN" aria-pressed="true">中文</button>
+          <button type="button" lang="en" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button type="button" id="dismiss" class="icon-button" data-label="close"><i data-icon="close"></i></button></div>
+    <div class="sheet">
+      <section class="composer region" aria-labelledby="compose-heading">
+        <div class="section-heading"><h2 id="compose-heading"></h2><button id="cancel-edit" type="button" class="text-button" data-t="cancelEdit" hidden>取消编辑</button></div>
+        <input type="file" id="file-input" accept=".png,.glb,.json" multiple hidden>
+        <button id="dropzone" type="button" class="dropzone">
+          <span class="upload-icon"><i data-icon="upload"></i></span>
+          <strong data-t="drop">将素材文件拖到这里</strong>
+          <span class="browse-link" data-t="chooseFiles">选择文件</span>
+          <span class="formats">PNG · GLB · JSON</span>
+        </button>
+        <div id="draft-files" class="file-list"></div>
+        <label class="field-label" for="caption"><span data-t="caption">素材组说明</span><small data-t="optional">可留空</small></label>
+        <textarea id="caption" rows="3" data-placeholder="captionHint"></textarea>
+        <div class="composer-actions"><button id="add" type="button" class="button accent-outline"><i data-icon="plus"></i><span id="add-label"></span></button></div>
+      </section>
+      <section class="library region" aria-labelledby="library-heading">
+        <div class="section-heading"><h2 id="library-heading" data-t="library">素材</h2><span id="counts" class="count"></span></div>
+        <div id="blocks"></div>
+        <section class="brief-section" aria-labelledby="brief-heading">
+          <h2 id="brief-heading"><label for="task-brief" data-t="brief">建筑概况</label></h2>
+          <textarea id="task-brief" rows="5" data-placeholder="kickoffExample"></textarea>
+          <details id="thickness-options" class="thickness-options">
+            <summary data-t="thicknessCandidates">候选厚度（mm）</summary>
+            <div id="thickness-groups"></div>
+          </details>
+          <div class="run-models" role="group" data-label="configuration">
+            <div class="config-cell">
+              <label for="coordinator" data-t="coordinator">主控模型</label>
+              <div class="select-wrap"><select id="coordinator"></select><i data-icon="chevron"></i></div>
+            </div>
+            <div class="config-cell">
+              <label for="workers" data-t="workers">协作模型</label>
+              <button class="select-button" id="workers" type="button"><span class="value" id="workers-value"></span><i data-icon="chevron"></i></button>
+            </div>
+          </div>
+          <button id="run" type="button" class="button primary"><i data-icon="play"></i><span data-t="run">运行</span></button>
+          <p id="run-hint" class="hint" aria-live="polite"></p>
+          <div id="run-status" class="run-status" aria-live="polite" hidden></div>
+        </section>
+      </section>
+    </div>
+  </main>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button class="icon-button" id="dialog-close" type="button" data-label="close"><i data-icon="close"></i></button></div><div id="dialog-body"></div></dialog>
+</body>
+</html>

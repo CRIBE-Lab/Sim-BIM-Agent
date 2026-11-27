@@ -1,9 +1,9 @@
 {
   "aliases": {},
-  "current_domain_version": "domain-product-v1-9541390aea8b51282b96fdc3",
-  "current_runtime_version": "runtime-product-v1-7366aad816b95e6fc00d036c",
+  "current_domain_version": "domain-product-v1-4635d05ad2989bd55a71b8a2",
+  "current_runtime_version": "runtime-product-v1-4c6f7965f2349809e3400b90",
   "domain_versions": {
-    "domain-product-v1-9541390aea8b51282b96fdc3": {
+    "domain-product-v1-4635d05ad2989bd55a71b8a2": {
       "coverage": "automatic_directories",
       "files": {
         ".python-version": {
@@ -12,23 +12,27 @@
         },
         "Start.cmd": {
           "kind": "tool",
-          "sha256": "a28e00feb2d9f5fcd63976cb0482c1fdf863cd360183543e61b97069f8132706"
+          "sha256": "af59d7bb248a2b3b976c7a84e041bc213b2198bdc1709fb3560a07e76df0d9ce"
         },
         "config.example.json": {
           "kind": "tool",
-          "sha256": "99b3d0fb08659b3eccff402765a323e0bb53209579e48bc730c31a15608bf908"
+          "sha256": "a83f6466a559e08d3b7524a4fb50e494829d1736654757153bdb2a87198a2fd6"
         },
         "config.mesh.example.json": {
           "kind": "tool",
-          "sha256": "a1382b1d35be26c9c129f927f207003066b62ff00226825bbfcb362863803599"
+          "sha256": "b437b63432f9ad9dff790e6ab08ae8ca62c7266a7d8d39445717746555e60d78"
         },
         "config.opencode-go.example.json": {
           "kind": "tool",
-          "sha256": "66b2bc70012a89ce9676c4edfac61d8a12c7b1c25a2a8358400a5aa2a646ad10"
+          "sha256": "df63326233c9056603e1641b689e2affaea5e9c9516c30c4f3ab6c4ec5118c59"
+        },
+        "config.orchestrator.example.json": {
+          "kind": "tool",
+          "sha256": "1d841534e421cf64f25957235dcf29581401366a2c66be24de374b9be9bd8c10"
         },
         "scripts/tool_scripts/bim_agent_architectural.py": {
           "kind": "tool",
-          "sha256": "4a80bc39e8cfb7e9064c0d4ab66eb978ff8ace280331751dec33eeb28fef7a0d"
+          "sha256": "bc6a655bc604b12b49adb72a1b21f1d6da6cd331918afd8e84a6919d790313a3"
         },
         "scripts/tool_scripts/bim_agent_budget.py": {
           "kind": "tool",
@@ -44,7 +48,7 @@
         },
         "scripts/tool_scripts/bim_agent_delivery_display.py": {
           "kind": "tool",
-          "sha256": "4ddd17399db6dedd9095097e47ff0ea60e8c734d70800d0160e6c08139018e38"
+          "sha256": "b9d3f641d7901385a81717de4813fe6b64c114bb9d4d11c7fb7a44453fd38bce"
         },
         "scripts/tool_scripts/bim_agent_drawing_readings.py": {
           "kind": "tool",
@@ -60,19 +64,23 @@
         },
         "scripts/tool_scripts/bim_agent_feedback.py": {
           "kind": "tool",
-          "sha256": "8e6026d8995fe73df3c239d5dd817d647822f4fa28dd3abeb49baa80eb8fcaa8"
+          "sha256": "6bbd6242311445bef76f2ac5cad69d248503a68ee7db707fa5dff0734edc6354"
         },
         "scripts/tool_scripts/bim_agent_guidance.py": {
           "kind": "guidance",
-          "sha256": "5ecbe37a4e83f46f8d6131e4136b6b712393ad8ec0caa932acc0f75e2b633fa6"
+          "sha256": "3acaf70d3e818bf5d9d4c9415177ef7dc253938764f114c8ed084014d78b66c6"
         },
         "scripts/tool_scripts/bim_agent_inference.py": {
           "kind": "tool",
-          "sha256": "60d8ef5a1421e1ebc06c9ddfe86e393e9b7cc1698cc61f34a3a10dd0203b18de"
+          "sha256": "6d2ad50d9b7e0c32f77271c649052c5903c4695da9ae66148a7f160a3994d2b6"
         },
         "scripts/tool_scripts/bim_agent_inputs.py": {
           "kind": "task_description",
           "sha256": "ddb2aca4b2782723e19c1bfe8534a10f81ca06712c3980334c2253ef0ffc368c"
+        },
+        "scripts/tool_scripts/bim_agent_inspection.py": {
+          "kind": "tool",
+          "sha256": "e0fd394b54f0fae7e5c48937d9a8e32e7d7c54b2a0ac76c1ad1596a7dbd43658"
         },
         "scripts/tool_scripts/bim_agent_mesh.py": {
           "kind": "tool",
@@ -84,31 +92,35 @@
         },
         "scripts/tool_scripts/bim_agent_mesh_review.py": {
           "kind": "tool",
-          "sha256": "1112d26c745208ef249eae8fddc1c0279397ca7895662f28fabca59c68abee85"
+          "sha256": "66e743a8cb3cafc4c057aa3c1daf4c11016149146700e665679a90737b3ce9ee"
         },
         "scripts/tool_scripts/bim_agent_parametric.py": {
           "kind": "tool",
-          "sha256": "47ac765c9991e41899bb02c6ccb67513ec914dabcfcabc03fcc3b1042314e960"
+          "sha256": "ea40b8df564e5383ba7e704270ed96406bfd6766a83eb561fcbc8f72a6233a0a"
         },
         "scripts/tool_scripts/bim_agent_parametric_lineage.py": {
           "kind": "tool",
           "sha256": "b96da504f25f0a339441c07f07083b1eade554a86010f0305862349f3e7e45c1"
         },
+        "scripts/tool_scripts/bim_agent_partition_precision.py": {
+          "kind": "tool",
+          "sha256": "31073899d810733edbec11d52da78ec35a8c9d5cb52557451362fcb67f027de8"
+        },
         "scripts/tool_scripts/bim_agent_precision.py": {
           "kind": "tool",
-          "sha256": "c35c54101f32938a6d5e0c3bbee5248478b9316c2d567db222a3b3b4651bf2c6"
+          "sha256": "9c43a06b046a5c6f8cb6065de7e45197b37b89ec5a8cc1736b7009af85a6588b"
         },
         "scripts/tool_scripts/bim_agent_process_reviews.py": {
           "kind": "tool",
-          "sha256": "c0c5283f708baf824015072689d4f4e8abcbbe7d12e72bc1aa0718970ae5ca16"
+          "sha256": "886890a5e4ff0c4c03828d49743233e24e01058d42fe6d87e933c1d2e5e39c75"
         },
         "scripts/tool_scripts/bim_agent_regularization.py": {
           "kind": "tool",
-          "sha256": "71aa3a4873e37fbe370bcc355f5f466470c270ba9e787a76fad47876042bace8"
+          "sha256": "a7538ee79425562e4fa673605bcf3643e1fe915e7a418b5cf558b88692e8a63a"
         },
         "scripts/tool_scripts/bim_agent_replies.py": {
           "kind": "tool",
-          "sha256": "49d7456e2036aca17ade3d8b816e8d401b092bc42278e98682731daf847c9607"
+          "sha256": "8b27d32aeebb70db0fe4f7406c9bba4d10a96f41f59182365552a8dd4efcc668"
         },
         "scripts/tool_scripts/bim_agent_review_scope.py": {
           "kind": "tool",
@@ -128,19 +140,35 @@
         },
         "scripts/tool_scripts/bim_agent_source_precision.py": {
           "kind": "tool",
-          "sha256": "36969c1b71adad0ea304e389fe284e3bd0390f9319cca73af748eb6684618b3c"
+          "sha256": "cabeb6fbd7bd0805a48f9c6d5ab05653b63208a154a9325728860f373c78a021"
         },
         "scripts/tool_scripts/bim_agent_view_selection.py": {
           "kind": "tool",
           "sha256": "0f7fa6d4f5a7ca44e0bff9a8719452e309d43d0c9ad5f853e4df41986c932362"
         },
+        "scripts/tool_scripts/bim_display_language.py": {
+          "kind": "tool",
+          "sha256": "8f1679922617823f63d3974eb586ed806dbe9904cd209a15a12f4d2a586741e2"
+        },
+        "scripts/tool_scripts/bim_viewer_annotations.py": {
+          "kind": "tool",
+          "sha256": "63b21979b6fa249e8b1455240037cd9213b73d2e94f344a24a6f32b28560da41"
+        },
+        "scripts/tool_scripts/bim_viewer_inspection.py": {
+          "kind": "tool",
+          "sha256": "adf6599cf53e63748037987831a5455625c138e27e825029c3220516620a6e3d"
+        },
+        "scripts/tool_scripts/bim_viewer_legacy_names.py": {
+          "kind": "tool",
+          "sha256": "0cb696e138dda9a1f31e344eb5f13d7f42217662dbc703a184de8cd158e7d98d"
+        },
         "scripts/tool_scripts/render_geometry_viewer.py": {
           "kind": "tool",
-          "sha256": "777f93d20ab91e4313ce39e503225a276c45ff668bf3e877b3bbd0fe3afe2506"
+          "sha256": "718c575d60adfdd4d07f3c4ed543be45cabdca41223c7d3030ba554a7d9fcb75"
         },
         "scripts/tool_scripts/run_bim_agent.py": {
           "kind": "task_description",
-          "sha256": "41e13b6bac088fdda3472e45bc4b2f69335754d183df68acd081957877ddd93a"
+          "sha256": "38bacbaece2f619a21fe48ab63b3015b270b3e26ad134554a0c3dffb78c6faf1"
         },
         "scripts/tool_scripts/vendor/OrbitControls.js": {
           "kind": "tool",
@@ -162,9 +190,13 @@
           "kind": "tool",
           "sha256": "54005311aecb72254ced13b51b7deb21430bd5348bc5cc06eaf0dd51bf6c8099"
         },
+        "src/agent/background_observers.py": {
+          "kind": "tool",
+          "sha256": "d047d5109187de81c829c1d854766f2a138cbba11466e9cb35bf132ecc82aa98"
+        },
         "src/agent/bim_inputs.py": {
           "kind": "task_description",
-          "sha256": "d269db5bcf8db300d309948b251a8dfab17aebd92e6f4c3d671f791ad702d8ef"
+          "sha256": "e859e1a0bfac31ddd7b723d6e66dc9239ab3ca8bf59a9847e2bd361e3431363f"
         },
         "src/agent/data/room_types.json": {
           "kind": "tool",
@@ -190,9 +222,13 @@
           "kind": "tool",
           "sha256": "822663ad294e9d8cd106ab48e817ec543999f64a34ff1865de46c50a7d579373"
         },
+        "src/agent/execution/handoff_transaction.py": {
+          "kind": "tool",
+          "sha256": "82f1a609755b0b721d2384ba326e930eae96119341a0d2317bb500f4a156adbc"
+        },
         "src/agent/execution/source_proposal.py": {
           "kind": "tool",
-          "sha256": "a9e5586d5d13866786b3959d4f9d82df5437c856aecf45efc6e82d083e3077e7"
+          "sha256": "6b24ba695f47e0b7a6c02d9fc27237d838dcc8839e39cf1541767b322ba62e4b"
         },
         "src/agent/geometry/__init__.py": {
           "kind": "tool",
@@ -208,7 +244,7 @@
         },
         "src/agent/geometry/architectural_regularization.py": {
           "kind": "tool",
-          "sha256": "2ba086927166057f890ba3a3cb68f5aa459f42f66fd372b3c96fd52824c6fa63"
+          "sha256": "ed40c1bfb9c2a5a24181a603f4af959be01dd53a74ce57e435db90cbfaeb1d07"
         },
         "src/agent/geometry/bim_delivery.py": {
           "kind": "tool",
@@ -244,11 +280,11 @@
         },
         "src/agent/geometry/lite_bim_regularization.py": {
           "kind": "tool",
-          "sha256": "fc98142a861365460ad54e67d9ac7faace63c3a96ce2f63d3b7d1dac790f998c"
+          "sha256": "035b985ab1aea0d89a09bfdcd1c8875bbe814fb4e94d190806944784af62c507"
         },
         "src/agent/geometry/mesh_bim_frame.py": {
           "kind": "tool",
-          "sha256": "b5e88100ba17af41240b662313066c137be3facd78003dedbd1bf48d17d2901b"
+          "sha256": "464002ebe929024affb86ad81e39cdea5a317c4f89b9fe424c5f685a87e63bbb"
         },
         "src/agent/geometry/mesh_correspondence.py": {
           "kind": "tool",
@@ -264,7 +300,7 @@
         },
         "src/agent/geometry/opening_review.py": {
           "kind": "tool",
-          "sha256": "f3e1045ac52f5462b4f66a20539ee576d41ea77cb1a3fa01b0f07d64c934d04d"
+          "sha256": "101b97048405a8a5d242feabb8a1f3009bdf8f8af2312ec2fe519fb031ff6fc0"
         },
         "src/agent/geometry/opening_segments.py": {
           "kind": "tool",
@@ -272,11 +308,11 @@
         },
         "src/agent/geometry/openings.py": {
           "kind": "tool",
-          "sha256": "dd77a2b1558e29c6d3328cc1d3d5434aa1da3e0760e7a3c6f4be94da306ef288"
+          "sha256": "0899f120462fd549f52c938a66b6dc2f8932cc72174074ae043f37cc878f581f"
         },
         "src/agent/geometry/parametric_continuity.py": {
           "kind": "tool",
-          "sha256": "39b2593c080d23345db1bdbd37077afd00d3cc2e5dfb31bafa6e952ebbd3e4bd"
+          "sha256": "3e1bd1c82dc2fff17461e67f1485dfd667781e09c2e6a1773391c544aca8aaa1"
         },
         "src/agent/geometry/parametric_primitives.py": {
           "kind": "tool",
@@ -284,7 +320,7 @@
         },
         "src/agent/geometry/parametric_proposal.py": {
           "kind": "tool",
-          "sha256": "492975d91ca443719ba5f0e36f17aaa97d45f0a2ea83a003360817fcd982d3c0"
+          "sha256": "d766724cac211acc93cd2efb5c60ab77d29e78d719d81209cf86eb9dcf388370"
         },
         "src/agent/geometry/parametric_validation.py": {
           "kind": "tool",
@@ -350,25 +386,37 @@
           "kind": "tool",
           "sha256": "cc87271da6cff784933e7c0680e28e3fb09ce3f6b2ce1793cdd8f989ec5bd5da"
         },
+        "src/agent/geometry/principal_material.py": {
+          "kind": "tool",
+          "sha256": "7d603f47968e97bc328d03fa08df0032372d5939359b64639e34f8c888863709"
+        },
         "src/agent/geometry/profile_observation_binding.py": {
           "kind": "tool",
           "sha256": "6a47dca182dececed3761b6461113fc80795b95eec97a39de112fe2c1058f74b"
         },
         "src/agent/geometry/proposal_edits.py": {
           "kind": "tool",
-          "sha256": "39beb59624ccfa1cac7d9f9c55c342cc28c496fe08f9dc1d8d87e59fa6f30b18"
+          "sha256": "d4f8a4118327f5ba0901774cf37e92a6010851ca8847ba8a4ac2c1bf50371567"
         },
         "src/agent/geometry/reader_wall_metadata.py": {
           "kind": "tool",
-          "sha256": "4ce23f78d47a8a6e809f82f31d1f23f506e7a92dbfbe173490ecd43cf96262c8"
+          "sha256": "d48600772e4875bf4a51d254aa47373041b6fda478e7e156a89f53bcdbc98b11"
         },
         "src/agent/geometry/ring_failure_diagnostics.py": {
           "kind": "tool",
           "sha256": "ddcd2c1cd31f241a14a6eb11b0e81141012d800e12a1d11cf7dc2e30a1542c3b"
         },
+        "src/agent/geometry/sim_component_topology.py": {
+          "kind": "tool",
+          "sha256": "d9b930082d05da7518a2a0a4eaf951f018697fc85f407c0e37189abf25a28b0c"
+        },
+        "src/agent/geometry/sim_components.py": {
+          "kind": "tool",
+          "sha256": "a935ab77663ec61322b842f4cf8fb90dc92b693e6e69d534a2776f7911145bbb"
+        },
         "src/agent/geometry/source_bim.py": {
           "kind": "tool",
-          "sha256": "925375c1486f82dfab2a451540c9bb21a2034d167b12366e0f09bd87e2f51049"
+          "sha256": "10a947ce9664327b13b79bc227f70c704cd5eedf59199d2829c1d3b93bf80ee2"
         },
         "src/agent/geometry/source_curves.py": {
           "kind": "tool",
@@ -384,7 +432,7 @@
         },
         "src/agent/geometry/source_enclosure.py": {
           "kind": "tool",
-          "sha256": "bb72c96f191d18d673db0fe04ece836ab71165854cda319ab64f18d78898354f"
+          "sha256": "024b655a743d8be94ed6d73ba059e1b93dec40f11742ead2b81b37b6f0008c10"
         },
         "src/agent/geometry/source_enclosure_intent.py": {
           "kind": "tool",
@@ -404,7 +452,7 @@
         },
         "src/agent/geometry/source_naming.py": {
           "kind": "tool",
-          "sha256": "82fb4ce8fade1222e6283bb4ebd753f81941372157cc7341d3c7f0f670e7e3c7"
+          "sha256": "fec948dbac2125048dad0523fc006e21aa134fa5d168a33de3b30a16802fc069"
         },
         "src/agent/geometry/source_plan_view.py": {
           "kind": "tool",
@@ -426,9 +474,21 @@
           "kind": "tool",
           "sha256": "17d12539d3522ac1ab34ce034baa8f7ba2e9bfa2e0404490840bd59d4e2713f0"
         },
+        "src/agent/geometry/storey_codes.py": {
+          "kind": "tool",
+          "sha256": "8c3187fb01d6f50f8490cadf2df7d674cda2e281bd3479d16c459acdee151d59"
+        },
         "src/agent/geometry/surfaces.py": {
           "kind": "tool",
           "sha256": "96f9b4ebdee2323ffcaa9c8fa9de77bdec88d1db94196907a6a50ce31e94d20a"
+        },
+        "src/agent/geometry/thickness_options.py": {
+          "kind": "tool",
+          "sha256": "293b893a9167c51b24373867a5b8607cf6fb24f533bde3c9c6a22c25d3cbf530"
+        },
+        "src/agent/geometry/viewer_metrics.py": {
+          "kind": "tool",
+          "sha256": "10ae3ed8b384d515f0036c71ab78252185f52fe3aa3cd17608c76ce0310b92ff"
         },
         "src/agent/geometry/wall_merge_policy.py": {
           "kind": "tool",
@@ -478,9 +538,17 @@
           "kind": "tool",
           "sha256": "f95fb505be69bb8a595c9b3e10b33c7548e24c2d8ed24f9b17bbf7bb66f0bc06"
         },
+        "src/agent/model_revision.py": {
+          "kind": "tool",
+          "sha256": "f1e66b1f31da5bc3ff895880c9e3e9a08e174a4d45abbe57fac622e9e3214d8e"
+        },
+        "src/agent/observer_mcp.py": {
+          "kind": "tool",
+          "sha256": "eaf2f6cba69a94f4693f235b0e5fc2d09dbbfbb16c375a48696510baeaa0108b"
+        },
         "src/agent/product_cli.py": {
           "kind": "tool",
-          "sha256": "a91e52fd282dd67d2d06cd4bb088c3b1b6815c162cfc54dfc1ac5cb5e0a955ab"
+          "sha256": "0bf97f47d95c10b036fe231465f53816cd2160017860d7961d3a13c24efd0339"
         },
         "src/agent/roles.py": {
           "kind": "tool",
@@ -492,19 +560,19 @@
         },
         "src/agent/runtime_configuration.py": {
           "kind": "tool",
-          "sha256": "28703cda4e1301661002de4240840697ba18ed1a5fef3a3d2f24675ac4c55c9f"
+          "sha256": "6fd7c872e6a4d35a0830b20428dd3ebf89d2627abb2596b49e4cf8d73c8a326e"
         },
         "src/agent/runtime_context.py": {
           "kind": "tool",
-          "sha256": "bf5e1b7b37c5fe6f0f1115ae83aefab89021537db2b577f4cad5aa6ff52f867f"
+          "sha256": "29563671db35dc406a3978ab74d600c69d930fec8b543201d156bda7fe5982d9"
         },
         "src/agent/runtime_delivery.py": {
           "kind": "tool",
-          "sha256": "e2a5553db6ee34f2f70a836ab3a18f6f2f20c673bae38c5901157df1684796e0"
+          "sha256": "93536cae35cf0e18e55a574c22e8bd5ebe7f9e2508eb98270108a5e3e1bc96ed"
         },
         "src/agent/runtime_entry.py": {
           "kind": "tool",
-          "sha256": "0c26db7670557faa6f5266e398a6737f2547a96be953b291d24fb07d854200be"
+          "sha256": "f6a165bb95cde40de841542040e030971fe2eeaeb8a0dc6a96bba4f116a664d3"
         },
         "src/agent/runtime_mesh_continuation.py": {
           "kind": "tool",
@@ -512,7 +580,7 @@
         },
         "src/agent/runtime_mesh_evidence.py": {
           "kind": "tool",
-          "sha256": "7d011281b61c8ff136a7c5b3ecd13fee0f248ea531c5c111f61a383e06f3acb6"
+          "sha256": "cd1e11bf861f091946e545544c6b44a601eb86497c738c1e4e59e3097e0bed9e"
         },
         "src/agent/runtime_mesh_image_views.py": {
           "kind": "tool",
@@ -520,7 +588,7 @@
         },
         "src/agent/runtime_mesh_workers.py": {
           "kind": "tool",
-          "sha256": "8d4b06a9d0699b54b91a592394ecb41ee932fcb69155e6617a64ada2de2a3092"
+          "sha256": "59f9da17655ebc3f197aae7c6ed6a4e433546527bb1e09167295c3bb605f9e47"
         },
         "src/agent/runtime_roles/__init__.py": {
           "kind": "tool",
@@ -584,7 +652,7 @@
         },
         "src/agent/runtime_roles/entry.py": {
           "kind": "tool",
-          "sha256": "f374e6be40123df59155d06952141de6049c5fcccea9aea8a3e53ff6c986f19a"
+          "sha256": "0aa6427f12448cadc7235ed7f5bc788012c7d7ccbbb9c05c6fd8566e1a1071e6"
         },
         "src/agent/runtime_roles/feedback.py": {
           "kind": "tool",
@@ -592,7 +660,7 @@
         },
         "src/agent/runtime_roles/guidance.py": {
           "kind": "guidance",
-          "sha256": "8f50e31ec661685078efa248d57eb80520d1d9f3cd9a896c85f8156560fddc25"
+          "sha256": "8348ef40daaa1d9fa3116311f234270dc2a3537bba9751293d656a3a8b272801"
         },
         "src/agent/runtime_roles/height_evidence.py": {
           "kind": "tool",
@@ -628,7 +696,7 @@
         },
         "src/agent/runtime_roles/plan_reading.py": {
           "kind": "tool",
-          "sha256": "b483ae91c7a23ab49e41f1990dbd32c58a4960d5a5d0a33ad95eada4caa1fa2c"
+          "sha256": "e6526e4049cb8bd0f9a7ee2a07c90cf75fad48b0624cc536cdb334a18967e240"
         },
         "src/agent/runtime_roles/plan_review.py": {
           "kind": "tool",
@@ -652,7 +720,7 @@
         },
         "src/agent/runtime_roles/session.py": {
           "kind": "tool",
-          "sha256": "3ec6451fda62593a11537f1595680dae87cb9b2d757fec6944bcd5965d770e33"
+          "sha256": "c33c572705aea84fb267f41d673e8c2f26fe92b0389535f12d8f619994d6ca65"
         },
         "src/agent/runtime_roles/submission.py": {
           "kind": "tool",
@@ -664,11 +732,11 @@
         },
         "src/agent/runtime_roles/trial_feedback.py": {
           "kind": "tool",
-          "sha256": "ca8da0f3253d49847d87c8043f308ced663b90b7dc3722a815a839df12df3743"
+          "sha256": "60405cd92782d624d0433375c6c57c43b87a306868c41ce3623fa34a94c6d851"
         },
         "src/agent/runtime_tools.py": {
           "kind": "tool",
-          "sha256": "6484cb4c3c637b245ce9bef6a31b792c3e5319fba0ace21dbb76d2acf7cbb216"
+          "sha256": "b1cd712ae57e9878c3a73d03203f25af73851d051bf42e784e4bb472d3245463"
         },
         "src/agent/runtime_worker_budget.py": {
           "kind": "tool",
@@ -676,31 +744,83 @@
         },
         "src/agent/version_fingerprints.py": {
           "kind": "tool",
-          "sha256": "9b7c39785c52a89159b58ab1a7535093c7b85da2cef2cf93ef618369953c7a7a"
+          "sha256": "6fa215442ffa19fef808ce22ff0492f7678d71e55fca7a6c68e45eed29d6dbd8"
+        },
+        "src/agent/viewer_publication.py": {
+          "kind": "tool",
+          "sha256": "80f828c527da07249de7439e1ed16f396115d3780bc828ea4636be0d56d2612c"
         },
         "src/configs/geometry.yaml": {
           "kind": "tool",
           "sha256": "e0306675fda8a1315eaa4cf835e54f541e06a32505c85378c28c5689a731da63"
+        },
+        "src/run_trace/__init__.py": {
+          "kind": "tool",
+          "sha256": "28379eeb433124da9ee42773759c963d1da4de370c8dfe85307b3a28664fec2c"
+        },
+        "src/run_trace/event_data.py": {
+          "kind": "tool",
+          "sha256": "f376884e4f846044804164765290906d4b123e90c4ed0c6785d6eff7356fb035"
+        },
+        "src/run_trace/privacy.py": {
+          "kind": "tool",
+          "sha256": "54b8b65d253ee89531a8b0d77e4209e16afa4f2d4c85586bc72c1622726505c1"
         }
       },
       "mode_fingerprints": {
         "mesh_workers/coordinator": {
-          "guidance_sha256": "30412c90ddc012d5778910ee6da0a836ac913cb41304f74c4196c738a9d8a0ae",
-          "sha256": "445f9a466ff7f3bb459b3ae510c6c6ab9d6fe56d3466ee44a83db83da74badf0",
+          "guidance_sha256": "c554f5e7df04affe22c0c3615cf8de91612a40849bcceceed17e3509972504aa",
+          "sha256": "9e9e408c2b19f2846262bdd1ef2ca196aa9b997f6fb4aebfe5fff80678bfd53e",
           "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
-          "tools_sha256": "06c0e6358c4d89a9e04cc2ee71d259352f1ccfd1c838e00da24e1500de89f3fd"
+          "tools_sha256": "c23b42f7624962455dd563e6e4ab3938e59ced2e367c434fb741881cf4133c50"
         },
         "mesh_workers/observer": {
           "guidance_sha256": "647868a3211f743d06abf1180d51424adac71075051c370a37366a4e77f7165d",
-          "sha256": "c382d94d2e0ee4416de849c9b558663b4cc43cd806eac7ddb83140f02a4d6bae",
+          "sha256": "9e60372cdb3cee98e4a7bf7f52fd391478c8a0eb024cbfa2672ca06200471c87",
           "task_template_sha256": "edd745ad0c0f62d8e54ba2791fb5bad82a5c5459edb337f436299d4fca27353a",
-          "tools_sha256": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
+          "tools_sha256": "0738672a68144fa6bc6380bb3ff8523a8b52b465a52e91a6852bf77d77002621"
+        },
+        "orchestrator/dsh/coordinator": {
+          "guidance_sha256": "19323216df8f073ee20da8715dc1dfb3c4c892c9930e1f60d5ba4af0bb19da53",
+          "sha256": "8afbb8bfadae4c13248a0eb443a86c1d18b8eb57cae332c1aa9e9ba3c462a7fd",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "f0772625c4f434fb0be67517c8e8d630664b11a5b4d4cb8edf6e23650d9257cd"
+        },
+        "orchestrator/dsh/coordinator_mesh": {
+          "guidance_sha256": "36911d6453f2ffd8c32c3fe5360c63aa1271b99d91e9ac42338009927863c103",
+          "sha256": "1b82cc6cabdd479d76e7a5c441a2484a472e78058993c90fd4dc1e43cf43b9fb",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "d92185895ab74cbb26919421abea225a7557a5b31a6fc3bce4e1976945361065"
+        },
+        "orchestrator/native/coordinator": {
+          "guidance_sha256": "19323216df8f073ee20da8715dc1dfb3c4c892c9930e1f60d5ba4af0bb19da53",
+          "sha256": "0c06d5f1614f1022eb9123ddbb4489f8f2e9d0643f80a08785468a93f5f8287c",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "322d8b90c04ca49ca5bf13efa5510d6405f8fd68d95d89164cce2a274cc63c6d"
+        },
+        "orchestrator/native/coordinator_mesh": {
+          "guidance_sha256": "36911d6453f2ffd8c32c3fe5360c63aa1271b99d91e9ac42338009927863c103",
+          "sha256": "2b956f2ed573cbf7e4836283b61775a08336152294d9f8b6c75a9718678d8305",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "6d85569422e930f5c99d4a36611fcf75c427dcac052a05c794404ce2ea3108cb"
+        },
+        "orchestrator/readonly": {
+          "guidance_sha256": "0fcc04d09660659cfa71874fb6a1a0626baf51f475f98c3ec5243d6f78d4baf4",
+          "sha256": "6e439492468180a4ad3e94067969231056c70782c9b1b64d221f14890939926d",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "9157cfbc752b998c7e8e7d0d12f6f28623f4b7d73aa2ae009f00d02233d4a8a5"
+        },
+        "orchestrator/readonly_mesh": {
+          "guidance_sha256": "0fcc04d09660659cfa71874fb6a1a0626baf51f475f98c3ec5243d6f78d4baf4",
+          "sha256": "05410cab150d94848b5aecc8e3411d4334a426251204db37c5525685a93c7527",
+          "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
+          "tools_sha256": "0738672a68144fa6bc6380bb3ff8523a8b52b465a52e91a6852bf77d77002621"
         },
         "role_division/coordinator": {
-          "guidance_sha256": "72823f778b129f3e0060eba56c70143cd208b337e2b62d524b0572d7cd584706",
-          "sha256": "02c888cabca9f7e58cb753595973ba1880adeeaa70c709b5cac0034169e19f1c",
+          "guidance_sha256": "740d76e2e376e6457c773b948efce6def2cfe07180f95a492471777cda02b214",
+          "sha256": "aad31441fe083bb1d2a861771d3121123473aebb0aba1f6fe5330f3a5bc1b9d0",
           "task_template_sha256": "31b3cc013fbe865f04fd59185190206f6137fd5621634af6aaf7b18d99c89cf1",
-          "tools_sha256": "fe8e3609e3af9a9c8424454f0a5f93f14409b276cb71ec414e692a658a177c58"
+          "tools_sha256": "a1402c4ca38f442b698fc46bea90f97764512d42ab7c4a508599ec70b239c5e2"
         },
         "role_division/elevation_reader": {
           "guidance_sha256": "e43bd5934864be2abe14298a88b3a9c7049222e3da7a3bebb86077df144d5502",
@@ -709,56 +829,56 @@
           "tools_sha256": "e1575d98562ec36c449e06f73aa155bde2e753a7f0bf1b1de8927171345f538e"
         },
         "role_division/plan_reader": {
-          "guidance_sha256": "644b73bb3db4a75e19415b99dc8a3d035c0457062f7684362811780ec6f5f648",
-          "sha256": "6732873c71fbedffd5324119e5b06552b5db0d51a02d3c3e6b589a9abd174cfa",
+          "guidance_sha256": "39ad97a7fc52ee261553961bac8e321ff04444962b21c67c784532cab70dbcec",
+          "sha256": "bc43eb84c508dea21787fd3452fd4ed3ed4220849ded3fb16cf4bfd5e0fc0fb6",
           "task_template_sha256": "12e2b839d761b2baf0f2c209255bc79aaf17b9222b778c86e2d402f5f3f5a009",
           "tools_sha256": "24b30b0fd5621c264c77881a4801f367c5c95ecc109166070f34bb77a37a36c4"
         },
         "single_model/coordinator": {
-          "guidance_sha256": "486c8dbb410b3f41958b284cc5f41a3a64f0956e87ff24d01cd4f76d1a03f9a1",
-          "sha256": "fdeb96d8fceb82a69ef45dbd310989564d85e54f7d7b3e31b78b47db9ba627f8",
+          "guidance_sha256": "c61c6e830ad52647b0bf31f64ace26b04b5f1a10c6d1b486e14b822a055bbbc1",
+          "sha256": "02dcb9780ef341c01112b3c5ec16a4d2be0c419332e46b4a7ddf2da4480919cf",
           "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
-          "tools_sha256": "4d6d405f333992101ff8c8fc3ac0a8c5a3e6217bfb9ce6f694e155a143e0f31f"
+          "tools_sha256": "ce1dd9482f345e2ae8ba5381729325b2a21e6b7fda6bdfa74b4de4558c22eaab"
         },
         "single_model/coordinator_mesh": {
-          "guidance_sha256": "68efca87cd639d04501b4d3f14eaf92d2f4dec392fd111374709e26058a66384",
-          "sha256": "436002e229e2d5b42787aae7d6d5ef8879c9c54fe3843c25857bca15addbe2c0",
+          "guidance_sha256": "336c28b1b165ef169416bf3dc8257703df8facb438a1382c0422d46e6d037985",
+          "sha256": "6b78d3c8f63d4d68eb31591177feaf372236e6d043333fa4a295a54010a77948",
           "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
-          "tools_sha256": "bb6f39c2ce8d6ca6734e2aeaec52ed4afca282b6395c12dd58fb6e300974f2ee"
+          "tools_sha256": "b128e7f7e3942d0a509efc8e4b7b5b88be8c5fbe32276c23db09bb0dcaf2d694"
         },
         "single_model/readonly": {
-          "guidance_sha256": "486c8dbb410b3f41958b284cc5f41a3a64f0956e87ff24d01cd4f76d1a03f9a1",
-          "sha256": "bc69e647891864ec10df5722129ddd592089df296b49f97187a2f2628fd8499a",
+          "guidance_sha256": "c61c6e830ad52647b0bf31f64ace26b04b5f1a10c6d1b486e14b822a055bbbc1",
+          "sha256": "d5c94f11b03f5711d28c1b699140f11b2668bdb7ddd7a7fa63bd21efe1a38641",
           "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
-          "tools_sha256": "3080bba18ae7bd4c955dbc8cf9cd9c84e9acd16d46d38bce8febfe11691098e1"
+          "tools_sha256": "9157cfbc752b998c7e8e7d0d12f6f28623f4b7d73aa2ae009f00d02233d4a8a5"
         },
         "single_model/readonly_mesh": {
-          "guidance_sha256": "68efca87cd639d04501b4d3f14eaf92d2f4dec392fd111374709e26058a66384",
-          "sha256": "936bd566ad6955610aefd3b77feae091b93af0eb26c34dc56b58f486b4e6a2a6",
+          "guidance_sha256": "336c28b1b165ef169416bf3dc8257703df8facb438a1382c0422d46e6d037985",
+          "sha256": "3c4f5cd062af764cd7fa75d86902eefae3ec5bed39ae2ab9a45faa163fbe47cf",
           "task_template_sha256": "7b8d577e6d31287c59bc420affb4e13e7b8091554d9204481005c628fd73e4f6",
-          "tools_sha256": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
+          "tools_sha256": "0738672a68144fa6bc6380bb3ff8523a8b52b465a52e91a6852bf77d77002621"
         }
       },
       "product_projection": {
         "schema_version": "sim-bim-product-projection.v1",
-        "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10",
-        "source_domain_version": "domain-v169-20261101",
-        "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
-        "source_runtime_version": "runtime-v46-20261101",
+        "source_commit": "8ec028e9b0e4b4ccfb3244276cb4fe915bcaf833",
+        "source_domain_version": "domain-v207-20261127",
+        "source_registry_sha256": "db50cc5684dc698d0a4710686172d5214a024a01bc6dde1051a83b44e13c90e7",
+        "source_runtime_version": "runtime-v74-20261127",
         "strategy_sources": {
           "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
           "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-          "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
-          "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
-          "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
+          "scripts/release/product-runtime-lock.json": "c9f7184556ad4736af5110c9269b5bb36888051efbbac2bcfa6311fbaf4a4ade",
+          "scripts/release/product_profile.json": "33649ec55057ef141961013ca78795ec8e4fff6cfafd4927b3f8ed9e6c0fcdf6",
+          "scripts/release/product_projection.py": "8eff77f06cef09f954b5512b9d176448d2b79d6287179e4aa4e49ba8bab1e6e2"
         }
       },
-      "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10",
+      "source_commit": "8ec028e9b0e4b4ccfb3244276cb4fe915bcaf833",
       "tool_catalog_sha256": {
-        "coordinator": "4d6d405f333992101ff8c8fc3ac0a8c5a3e6217bfb9ce6f694e155a143e0f31f",
-        "coordinator_mesh": "bb6f39c2ce8d6ca6734e2aeaec52ed4afca282b6395c12dd58fb6e300974f2ee",
-        "readonly": "3080bba18ae7bd4c955dbc8cf9cd9c84e9acd16d46d38bce8febfe11691098e1",
-        "readonly_mesh": "a8036a2d7a990ed5dfdcb3276d0fe2333d149fbe2f5c3df4a7ef1bfaf7ef553d"
+        "coordinator": "ce1dd9482f345e2ae8ba5381729325b2a21e6b7fda6bdfa74b4de4558c22eaab",
+        "coordinator_mesh": "b128e7f7e3942d0a509efc8e4b7b5b88be8c5fbe32276c23db09bb0dcaf2d694",
+        "readonly": "9157cfbc752b998c7e8e7d0d12f6f28623f4b7d73aa2ae009f00d02233d4a8a5",
+        "readonly_mesh": "0738672a68144fa6bc6380bb3ff8523a8b52b465a52e91a6852bf77d77002621"
       }
     }
   },
@@ -769,25 +889,25 @@
   ],
   "product_projection": {
     "schema_version": "sim-bim-product-projection.v1",
-    "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10",
-    "source_domain_version": "domain-v169-20261101",
-    "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
-    "source_runtime_version": "runtime-v46-20261101",
+    "source_commit": "8ec028e9b0e4b4ccfb3244276cb4fe915bcaf833",
+    "source_domain_version": "domain-v207-20261127",
+    "source_registry_sha256": "db50cc5684dc698d0a4710686172d5214a024a01bc6dde1051a83b44e13c90e7",
+    "source_runtime_version": "runtime-v74-20261127",
     "strategy_sources": {
       "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
       "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-      "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
-      "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
-      "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
+      "scripts/release/product-runtime-lock.json": "c9f7184556ad4736af5110c9269b5bb36888051efbbac2bcfa6311fbaf4a4ade",
+      "scripts/release/product_profile.json": "33649ec55057ef141961013ca78795ec8e4fff6cfafd4927b3f8ed9e6c0fcdf6",
+      "scripts/release/product_projection.py": "8eff77f06cef09f954b5512b9d176448d2b79d6287179e4aa4e49ba8bab1e6e2"
     }
   },
   "runtime_versions": {
-    "runtime-product-v1-7366aad816b95e6fc00d036c": {
+    "runtime-product-v1-4c6f7965f2349809e3400b90": {
       "coverage": "automatic_directories",
       "files": {
         "pyproject.toml": {
           "kind": "runtime",
-          "sha256": "f2f1d98efe3b774c5e3c00cec374de26f6b3461f865616ae3bfd20af88c9a094"
+          "sha256": "4d6d6b90c4eec916a2a1ac55945d60062725b47febd786138f0bc7d763a9b29c"
         },
         "src/__init__.py": {
           "kind": "runtime",
@@ -803,11 +923,11 @@
         },
         "src/agent_runtime/adapter.py": {
           "kind": "runtime",
-          "sha256": "807e4863966a95fbdd347a1fe3e44c5041207633b73d88321f4a122b9a5bfc0f"
+          "sha256": "247752329ca7dbd45cb058b9a386426b331dce22801093c76fd869928bb56211"
         },
         "src/agent_runtime/agent_registry.py": {
           "kind": "runtime",
-          "sha256": "8913162fda9cfe1b4e8a04932660d13a804cccf3faddf0f7f374c290b3c65bdb"
+          "sha256": "25eda359e48aa353dc6b963673f11650bdf4c7c2c4eec4f744d1bb62359d2ebe"
         },
         "src/agent_runtime/anthropic.py": {
           "kind": "runtime",
@@ -831,11 +951,11 @@
         },
         "src/agent_runtime/connections.py": {
           "kind": "runtime",
-          "sha256": "8b4572bb7f7d7e2c31413d6925c6bb0867b9334460c96190665ce8e2be1daf98"
+          "sha256": "217c9c5d25a8c84211776284ead34295355fd6db24471d3a2d5647c6e5822c78"
         },
         "src/agent_runtime/context.py": {
           "kind": "runtime",
-          "sha256": "b3b8e6c7d2da12270ed808555750f45c1b63aee20001b2b0bcff25dfdd61ffce"
+          "sha256": "ec30feee8e07549c4ba3428385f4556bbac00b4f6eb5cca9f65de31613b400ad"
         },
         "src/agent_runtime/context_continuation.py": {
           "kind": "runtime",
@@ -855,7 +975,7 @@
         },
         "src/agent_runtime/estimation.py": {
           "kind": "runtime",
-          "sha256": "a46d90cc40803b87eb67d34fce720b0e5caa85981962a57008708e907efd2973"
+          "sha256": "5d547956df3dead915eb4b5b02ef7702606491a6509cdfdeefef13fa8ee3af2c"
         },
         "src/agent_runtime/failures.py": {
           "kind": "runtime",
@@ -875,7 +995,7 @@
         },
         "src/agent_runtime/loop.py": {
           "kind": "runtime",
-          "sha256": "32f1ec4dae4a1489dbe385cc54a476404d28fbddcfb9249c44ce9c0754944bcb"
+          "sha256": "ba8fc5cc0eae9b1c4137899a5dd2505a5eb11b0866cccf406f46404ef8d83cc0"
         },
         "src/agent_runtime/mcp_tools.py": {
           "kind": "runtime",
@@ -883,7 +1003,7 @@
         },
         "src/agent_runtime/model_profiles.json": {
           "kind": "runtime",
-          "sha256": "e4c5e6264f81d0f5cc1c0872e93c31dc3d4e0541da2ca0f35c2ec96cfb14f441"
+          "sha256": "c00cdeff9cbf67b63c003f32e7ca95069ff3bc8485e70fb4dc838a3a715a0d02"
         },
         "src/agent_runtime/network_recovery.py": {
           "kind": "runtime",
@@ -891,7 +1011,7 @@
         },
         "src/agent_runtime/openai_subscription.py": {
           "kind": "runtime",
-          "sha256": "64f9a7ac1ae1c7961d04cba70f83d5a72c3f02db4486543e3b50ec58a41b096c"
+          "sha256": "3db4c73758c42b5521ec6bd80f4e4329b3c28f7b109d8cf26183488018efe4f5"
         },
         "src/agent_runtime/opencode_go.py": {
           "kind": "runtime",
@@ -899,11 +1019,11 @@
         },
         "src/agent_runtime/output_limits.py": {
           "kind": "runtime",
-          "sha256": "04ebd9b7081f2ede28ba45f5d61415c624ea51c86f3db40dfc89ec6d17e47541"
+          "sha256": "94e2313841eba9d951d325e67a14e276f040f3d0039fdcc8298616c72ed4783d"
         },
         "src/agent_runtime/providers.py": {
           "kind": "runtime",
-          "sha256": "31f89fab4af304957ea050eb23c099078b1b042627b94581de2a819d8c3d28a0"
+          "sha256": "be7e0fef108385d0c7df54a6f27797ee35cffdc07020a24e7f969cc835007c6e"
         },
         "src/agent_runtime/responses.py": {
           "kind": "runtime",
@@ -915,7 +1035,7 @@
         },
         "src/agent_runtime/run_paths.py": {
           "kind": "runtime",
-          "sha256": "b798f665a323bf4bf5404fd4c7d5e3d225159d0401d32f43ea5212050e06285f"
+          "sha256": "7e21ec43015c153d19f88fe30700d7cd224273e4f8e8a757a0f1541a02ec5c4f"
         },
         "src/agent_runtime/store.py": {
           "kind": "runtime",
@@ -927,7 +1047,79 @@
         },
         "src/agent_runtime/versions.py": {
           "kind": "runtime",
-          "sha256": "4b6ad76114f4e9ab00c7f4f84cc48f213ae6dcb5bb7fa9b04428218f94a8d1c4"
+          "sha256": "b6678c8386e020cc1c41514127f896e0d151ddd33db7fa845a034ec8e5b1da08"
+        },
+        "src/dsh_runtime/__init__.py": {
+          "kind": "runtime",
+          "sha256": "7a6eb1cf88e38a92ab7056fd46f09cc3b6b9df44e86fca1336a1e6383e986c01"
+        },
+        "src/dsh_runtime/chat_protocol.py": {
+          "kind": "runtime",
+          "sha256": "637d90cf55fe0d44fb146b6dd8dd9263740acf524ed9edbb3e89524471199ce7"
+        },
+        "src/dsh_runtime/completion.py": {
+          "kind": "runtime",
+          "sha256": "d02ddfe937707b1f21c83cbf688085b9dae6d02396651bd7afa484ca8d76910f"
+        },
+        "src/dsh_runtime/continuation.py": {
+          "kind": "runtime",
+          "sha256": "19722a9b4dc87533427dd7f07d5612ec355d871f3a8e32d6093512576757e88e"
+        },
+        "src/dsh_runtime/credentials.py": {
+          "kind": "runtime",
+          "sha256": "a6125c14a3b58911ae70c72941454a82d6f41a174e9baca09a6893897b2a28db"
+        },
+        "src/dsh_runtime/deepseek_harness.yml": {
+          "kind": "runtime",
+          "sha256": "69fd2ff44ae4402f24e569332eec598f12fa629841b0df978f50bb1d2f7e8339"
+        },
+        "src/dsh_runtime/handoff.py": {
+          "kind": "runtime",
+          "sha256": "13486dc885d7503e8c8dbf8db52ad3485036b869da81f79c9ec04207a65e8072"
+        },
+        "src/dsh_runtime/host-network.cjs": {
+          "kind": "runtime",
+          "sha256": "06984ae8016fa71efdbc2346ebb11ae0f911150658e319330f1cb1c917f783b3"
+        },
+        "src/dsh_runtime/image_history.py": {
+          "kind": "runtime",
+          "sha256": "f700b73c082aea67f21d120e15dd54d06fc773ad24b97a9aedecdb0d2f57a329"
+        },
+        "src/dsh_runtime/launcher.py": {
+          "kind": "runtime",
+          "sha256": "a1979cd3572dc3a44cb140fb4d9ba111b2d051501b65a63da1cc6d6bca815e9e"
+        },
+        "src/dsh_runtime/lifecycle.py": {
+          "kind": "runtime",
+          "sha256": "411125b2ef9482f81aff5689d747cc211abac10b423d04a0bf5b70a5e91e39b2"
+        },
+        "src/dsh_runtime/lifecycle_evidence.py": {
+          "kind": "runtime",
+          "sha256": "15f2e277dbbd0e26fd9f1299590e7647139b44992efea71e933450ce1cedf164"
+        },
+        "src/dsh_runtime/model_routes.py": {
+          "kind": "runtime",
+          "sha256": "665ca1a8bc824c41bfdf48762c85d8e0fd6a386465ac982a563152525e7b3a01"
+        },
+        "src/dsh_runtime/observer_closeout.py": {
+          "kind": "runtime",
+          "sha256": "2577c84f4756953038a6fb9a5484c914c52d2ab661c46c99a69e795bbd7cbea4"
+        },
+        "src/dsh_runtime/product.py": {
+          "kind": "runtime",
+          "sha256": "4a4fad9c170f5a6ed3faa89473598df247811eedb607602b58ab0e48c16a9237"
+        },
+        "src/dsh_runtime/profile.py": {
+          "kind": "runtime",
+          "sha256": "a70fa0789f2b8b26154116d7a3c3fafbcadec7f464ed0d3098202e17bc73586c"
+        },
+        "src/dsh_runtime/relay.py": {
+          "kind": "runtime",
+          "sha256": "fd01bec31153c85de042f77204dd47d84d8919e4ecd1099d6675210d5c1a90d0"
+        },
+        "src/dsh_runtime/transport.py": {
+          "kind": "runtime",
+          "sha256": "9f9ce3c396474ec65ca9f5a01b862a667e8b86ad5f2f52240410a67a79e4565a"
         },
         "src/harness_contracts/__init__.py": {
           "kind": "runtime",
@@ -969,26 +1161,114 @@
           "kind": "runtime",
           "sha256": "4826e78aa4204551a09c9c6961e5a87edfa933605e6dab6f7110ec58908c6eaf"
         },
+        "src/workbench/__init__.py": {
+          "kind": "runtime",
+          "sha256": "bb251db8fe7dd4f841690e2e297bff061889fbbbe8d8affbf8a67fedfaf901a6"
+        },
+        "src/workbench/connections.py": {
+          "kind": "runtime",
+          "sha256": "18f5e819d270c89d76583ca2e96c8aa466cb30371b58b910c83ba44e7328f37e"
+        },
+        "src/workbench/custom_connections.py": {
+          "kind": "runtime",
+          "sha256": "2975cf5d70a2981119dfc23cb65413d5f1dd954ae9f8951ca871bba5dd41c6e8"
+        },
+        "src/workbench/revisions.py": {
+          "kind": "runtime",
+          "sha256": "bdac2823988cfd1291c187f78f8cb6e965aa65174071d42683eaa5cd8e5018a0"
+        },
+        "src/workbench/runs.py": {
+          "kind": "runtime",
+          "sha256": "571da5d4c6999387952f610c258bfca196bcb8e9b4cf4f928b194fac99b4b678"
+        },
+        "src/workbench/server.py": {
+          "kind": "runtime",
+          "sha256": "7696eef7215c90afb744648393d3136d733e7edb2c30df231ced5857816747b8"
+        },
+        "src/workbench/static/app.js": {
+          "kind": "runtime",
+          "sha256": "9a8d9170250d1a1fe7fc62bd40c8838028b4f8571e18834eabfa66cf29e6561f"
+        },
+        "src/workbench/static/connection-form.js": {
+          "kind": "runtime",
+          "sha256": "2ba686f200e9cccd0ded7d50b62c01e17c074d3274a975999e0a7d43bc5c2469"
+        },
+        "src/workbench/static/dom.js": {
+          "kind": "runtime",
+          "sha256": "84e917aa7cf9380e13e148343a1509a9b9fd7fd85d041240e6c6a8ee9501b287"
+        },
+        "src/workbench/static/index.html": {
+          "kind": "runtime",
+          "sha256": "4a4c80d6b35315bed5c43c4b6312435cc8eb43ac4e660c2fa99003bb02170050"
+        },
+        "src/workbench/static/language.js": {
+          "kind": "runtime",
+          "sha256": "daad0e8a7daaba271287babb3a07f6707c31f1255f82c1cea5cd5b42d1d84fb9"
+        },
+        "src/workbench/static/mark.svg": {
+          "kind": "runtime",
+          "sha256": "513d6e60ea377f71ed1f35e7d143f2793bd11ecfb868553d89c3468fabe01315"
+        },
+        "src/workbench/static/preview.js": {
+          "kind": "runtime",
+          "sha256": "4afe26a02ecc814b6d204c43f4a36ecba4c891037c8c31c94f0f308f54fe34d7"
+        },
+        "src/workbench/static/run.html": {
+          "kind": "runtime",
+          "sha256": "235c378bafeb609eea816f85da9d128b405a921ece36f933b57c1cbf494c257a"
+        },
+        "src/workbench/static/run.js": {
+          "kind": "runtime",
+          "sha256": "d86560eb3e2d9b9331c55d6fcbad3467b62d4ebae6cb34c56e333ded2f87bf59"
+        },
+        "src/workbench/static/style.css": {
+          "kind": "runtime",
+          "sha256": "fe7f0aa2d5e5220b2a7e25a3bd38dc96bb33164c7755b9c830bb10e31f8cc09a"
+        },
+        "src/workbench/static/thickness.js": {
+          "kind": "runtime",
+          "sha256": "86648e33bd51f568472fbf759f2d53bf9d16dc447e4ccbaef0dd5e78f360773f"
+        },
+        "src/workbench/static/viewer-draft.js": {
+          "kind": "runtime",
+          "sha256": "7a7fbc486bae1793bdca2fc0dad826f8be6acb5dc4cda4e1e1dfb31df2bdc145"
+        },
+        "src/workbench/static/viewer-host.js": {
+          "kind": "runtime",
+          "sha256": "518235225de9d35a2f6a380dcba5535887e80153a56f7db427d48c4ccdefeead"
+        },
+        "src/workbench/static/viewer.html": {
+          "kind": "runtime",
+          "sha256": "6488c7cecee497fef64153f5cf30cd5ee839d4dee83655726729c1901cc292e1"
+        },
+        "src/workbench/storage.py": {
+          "kind": "runtime",
+          "sha256": "ef5234b73886c11bda08be3e0366deb1ed2b44d89a2e047f3fb54c304b394304"
+        },
+        "src/workbench/trace.py": {
+          "kind": "runtime",
+          "sha256": "64bcbe129935c6a5500b36b768b33398db64357b3962a1364d5fee070288fb61"
+        },
         "uv.lock": {
           "kind": "runtime",
-          "sha256": "ea94a91c9e1210bcf87ffdce76e99142aa947eb051aadd3f1c8377dca719abd2"
+          "sha256": "44075f238f2d560f85d025e2525aff408891685f095f3700dc4f3a890b391d88"
         }
       },
       "product_projection": {
         "schema_version": "sim-bim-product-projection.v1",
-        "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10",
-        "source_domain_version": "domain-v169-20261101",
-        "source_registry_sha256": "004905b590fa5855194aec1d323d40f5ea922d0898d5cc0d30907210c06eeaaa",
-        "source_runtime_version": "runtime-v46-20261101",
+        "source_commit": "8ec028e9b0e4b4ccfb3244276cb4fe915bcaf833",
+        "source_domain_version": "domain-v207-20261127",
+        "source_registry_sha256": "db50cc5684dc698d0a4710686172d5214a024a01bc6dde1051a83b44e13c90e7",
+        "source_runtime_version": "runtime-v74-20261127",
         "strategy_sources": {
           "scripts/release/build_product.py": "ab6514a550115db1c1c6d330646d61e410ec75a7832e462223c1eb29409cb54e",
           "scripts/release/prepare_product_dependencies.py": "860d6a2830bdaefe5a6f08caa5e7a019d46b041a7bc4711300c70d38a198092f",
-          "scripts/release/product-runtime-lock.json": "42a277d2754b8cfca7a7c799eaf8409bcad3a75bfc735a28bcbd7bd1fa71a7c1",
-          "scripts/release/product_profile.json": "d24dbcae2f8d750a2a45ca32b0f104f4d3b5682d02a1c226e98cf0ed0e21d392",
-          "scripts/release/product_projection.py": "d47861b63f8bd790bcd0c636821d5364497f5647e0c582401febb5568125434b"
+          "scripts/release/product-runtime-lock.json": "c9f7184556ad4736af5110c9269b5bb36888051efbbac2bcfa6311fbaf4a4ade",
+          "scripts/release/product_profile.json": "33649ec55057ef141961013ca78795ec8e4fff6cfafd4927b3f8ed9e6c0fcdf6",
+          "scripts/release/product_projection.py": "8eff77f06cef09f954b5512b9d176448d2b79d6287179e4aa4e49ba8bab1e6e2"
         }
       },
-      "source_commit": "c12b75a78556ac1724897ad57b04d1b11f786e10"
+      "source_commit": "8ec028e9b0e4b4ccfb3244276cb4fe915bcaf833"
     }
   },
   "schema_version": "agent-version-registry.v2",
@@ -1002,10 +1282,13 @@
       ".python-version",
       "config.example.json",
       "config.mesh.example.json",
+      "config.orchestrator.example.json",
       "config.opencode-go.example.json"
     ],
     "runtime": [
       "src/agent_runtime",
+      "src/dsh_runtime",
+      "src/workbench",
       "src/harness_contracts",
       "src/__init__.py",
       "src/utils",

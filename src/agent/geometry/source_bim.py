@@ -10,6 +10,7 @@ import math
 from itertools import combinations
 from urllib.parse import quote
 
+from shapely import set_precision
 from shapely.affinity import translate
 from shapely.geometry import Polygon, box, LineString, Point
 from shapely.ops import unary_union
@@ -23,6 +24,10 @@ from src.agent.geometry.source_model import _digest, source_primitives
 
 # Numerical comparison only; never a drawing snap distance.
 EPS = 1e-7
+
+# Disposable display booleans only. This nanometre grid resolves floating-point
+# seams, not architectural dimensions; source geometry and contacts stay exact.
+_DISPLAY_GRID = 1e-9
 
 
 def _coverage_regions(expected, actual):
@@ -618,6 +623,7 @@ def _display_parts(source):
     without inventing a reciprocal surface or hiding exposed parts of a wall.
     """
     result = {}
+    boundary_spaces = {b["id"]: b["space_id"] for b in source["boundaries"]}
     for boundary in source["boundaries"]:
         bid, vertices = boundary["id"], boundary["vertices"]
         # A materialized v2 source can already explicitly declare a wholly
@@ -636,6 +642,15 @@ def _display_parts(source):
             z = vertices[0][2]
             project = lambda ring: Polygon([v[:2] for v in ring])
             lift = lambda ring: [[x,y,z] for x,y in ring]
+        # Work close to the local origin, sharing one precision model across
+        # every boolean operand. Otherwise adjacent contacts such as 27.6 and
+        # 27.599999999999998 leave a drawable, zero-width wall strip. Never
+        # write these display coordinates back to the source boundary.
+        raw_project, raw_lift = project, lift
+        x0, y0, _, _ = raw_project(vertices).bounds
+        project = lambda ring: set_precision(
+            translate(raw_project(ring), xoff=-x0, yoff=-y0), _DISPLAY_GRID)
+        lift = lambda ring: raw_lift([(x+x0, y+y0) for x, y in ring])
         parent = project(vertices)
         if boundary.get('holes'):
             parent = parent.difference(unary_union([project(h) for h in boundary['holes']]))
@@ -647,25 +662,52 @@ def _display_parts(source):
         unknown_area = unary_union([project(r["vertices"]) for r in regions if r["condition"] == "unknown"])
         physical = wall.difference(open_area.union(unknown_area)) if regions else wall
         unknown = wall.intersection(unknown_area)
-        hidden = []
+        hidden = {}
         for relation in source["boundary_relations"]:
             if bid not in relation["boundary_ids"] or bid == min(relation["boundary_ids"]):
                 continue
+            owners = sorted({boundary_spaces[other] for other in relation["boundary_ids"]
+                             if other < bid})
             for region in relation["regions"]:
                 patch = project(region["vertices"])
                 if region["holes"]:
                     patch = patch.difference(unary_union([project(r) for r in region["holes"]]))
-                hidden.append(patch)
-        mask = unary_union(hidden)
+                for owner in owners:
+                    hidden.setdefault(owner, []).append(patch)
+        masks = [(owner, unary_union(patches)) for owner, patches in sorted(hidden.items())]
         rows = []
         for area, condition in ((physical, "physical"), (unknown, "unknown")):
-            for shape, duplicate in ((area.difference(mask), False), (area.intersection(mask), True)):
+            # Keep exact counterpart coverage for each piece. A piece can only
+            # be hidden while one of these source spaces is actually visible;
+            # filtering out the lower storey must restore the upper floor.
+            pieces = [(area, ())]
+            for owner, mask in masks:
+                pieces = [(part, owners + ((owner,) if covered else ()))
+                          for shape, owners in pieces
+                          for covered, split in ((False, shape.difference(mask)),
+                                                 (True, shape.intersection(mask)))
+                          for part in _parts(split)]
+            for shape, owners in pieces:
                 for part in _parts(shape):
                     row = {"verts": lift(list(part.exterior.coords)[:-1]),
                            "holes": [lift(list(r.coords)[:-1]) for r in part.interiors],
-                           "duplicate_at_rest": duplicate}
+                           "duplicate_at_rest": bool(owners),
+                           "occluded_by": list(owners),
+                           # Outline only actual physical/opening boundaries.
+                           # The internal cuts introduced by contact ownership
+                           # are bookkeeping, not architectural edges.
+                           "edge_segments": _display_edges(part.boundary.intersection(area.boundary), lift)}
                     if source["schema_version"] == "source_bim_v3":
                         row["enclosure_condition"] = condition
                     rows.append(row)
         result[bid] = rows
     return result
+
+
+def _display_edges(shape, lift):
+    if shape.geom_type in {"LineString", "LinearRing"}:
+        points = list(shape.coords)
+        return [lift([a, b]) for a, b in zip(points, points[1:])
+                if math.dist(a, b) > _DISPLAY_GRID]
+    return [segment for part in getattr(shape, "geoms", [])
+            for segment in _display_edges(part, lift)]

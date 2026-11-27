@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light"><title>Sim-BIM</title>
+  <link rel="stylesheet" href="/static/style.css"><link rel="icon" href="/static/mark.svg" type="image/svg+xml">
+  <script type="module" src="/static/run.js"></script>
+</head>
+<body class="activity-page">
+  <header class="masthead"><div class="masthead-inner">
+    <a class="brand" href="/"><img src="/static/mark.svg" alt="" width="30" height="30">Sim-BIM</a>
+    <nav class="activity-nav"><a href="/" data-t="inputs">Inputs</a><span aria-current="page" data-t="activity">Run activity</span></nav>
+    <div class="header-tools"><div class="language" role="group" id="language-switch">
+      <button type="button" data-lang="zh-CN" lang="zh-CN">中文</button><button type="button" data-lang="en" lang="en">EN</button>
+    </div></div>
+  </div></header>
+  <main class="activity-main">
+    <header class="activity-title"><div><h1 id="run-title"></h1><p id="run-status-line" role="status"></p></div>
+      <div class="activity-actions"><label class="run-history" hidden><span data-t="history">Run history</span><select id="run-history"></select></label>
+        <a id="download-link" class="button" hidden download="Sim-BIM.html" data-t="download">Download HTML</a>
+        <a id="delivery-link" class="button primary" hidden data-t="viewer">Open Sim-BIM</a></div>
+    </header>
+    <dl id="run-meta" class="activity-meta"></dl>
+    <p id="run-error" class="activity-error" role="status" hidden></p>
+    <section id="run-events"><h2 class="activity-heading" data-t="activity">Run activity</h2>
+      <p id="events-placeholder" class="trace-placeholder"></p><ol id="trace-list" class="trace-list"></ol>
+    </section>
+  </main>
+</body></html>

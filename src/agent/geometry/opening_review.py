@@ -491,8 +491,12 @@ def _validate_review(review: dict, images: dict) -> tuple[int, int, str]:
         _reject("review fields must be floor_id, kind, image, coverage, marks, and optional facade")
     if not isinstance(review["floor_id"], str) or not review["floor_id"]:
         _reject("floor_id must be a nonempty string")
-    if review["kind"] not in _REVIEW_KINDS or review["coverage"] not in {"complete", "partial"}:
-        _reject("kind or coverage is invalid")
+    if not isinstance(review["kind"], str) or review["kind"] not in _REVIEW_KINDS:
+        _reject(f"review_json.kind={review['kind']!r}; use door, window or passage. "
+                'Use kind="passage" when reviewing source openings with kind="open".')
+    if review["coverage"] not in ("complete", "partial"):
+        _reject(f"review_json.coverage={review['coverage']!r}; use complete for every opening in the "
+                "declared scope or partial for a local observation.")
     if not isinstance(review["image"], str) or not isinstance(review["marks"], list):
         _reject("image and marks have invalid types")
     if "facade" in review and review["facade"] not in _FACADES:

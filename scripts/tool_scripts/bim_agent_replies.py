@@ -213,6 +213,22 @@ def profile_summary(result):
 def summarize_reply(result):
     """Pure presentation: errors, findings, IDs, heights and geometry stay explicit."""
     reply = copy.deepcopy(result)
+    architectural = reply.get('architectural_diagnostics', {})
+    for row in architectural.get('rejections', []):
+        if row['code'] == 'volume_contact_changed' and row.get('members'):
+            reply['error_details'] = {**reply.get('error_details', {}), 'volume_contact': row,
+                                      'submitted_proposal': architectural.get('submitted_proposal')}
+            break
+    reciprocal = (reply.get('error_details') or {}).get('reciprocal_openings')
+    if reciprocal:
+        shown = []
+        for pair in reciprocal['pairs']:
+            if _reply_bytes([*shown, pair]) > 3600:
+                break
+            shown.append(pair)
+        if len(shown) < reciprocal['pair_count']:
+            reciprocal.update(pairs=shown, omitted_pair_count=reciprocal['pair_count'] - len(shown),
+                full_pairs_pointer='/error_details/reciprocal_openings/pairs')
     mesh_feedback = reply.get('mesh_feedback')
     if isinstance(mesh_feedback, dict):
         # Images have already been attached. Keep all selected overlay IDs and
@@ -319,7 +335,7 @@ def compact_reply(run: Path, tool: str, result: dict, *, full_result: dict | Non
         # Domain diagnostics and save facts are already bounded projections. A
         # large inventory must not hide the location/host needed for a repair or
         # the scope of a just-saved change behind another report-reading call.
-        for key in ('error_details', 'edit_route', 'save_facts', 'mesh_feedback'):
+        for key in ('revision_inspection', 'error_details', 'edit_route', 'save_facts', 'mesh_feedback'):
             if key in reply and _reply_bytes({**bounded, key: reply[key]}) <= 18000:
                 bounded[key] = reply[key]
         bounded['report_view'] = bounded_json_view(document,
@@ -358,14 +374,14 @@ def report_reference(report_file: str, sha256: str, pointer: str, value) -> dict
     return result
 
 
-def read_report(run: Path, report_file: str, offset: int, limit: int, *, json_pointer: str | None = None) -> dict:
+def read_report(run: Path, report_file: str, offset: int, limit: int | None, *, json_pointer: str | None = None) -> dict:
     """Read only an immutable tool reply; cannot reach arbitrary run/private files."""
     path = (run / report_file).resolve()
     folder = (run / 'tool_reports').resolve()
     if path.parent != folder or path.suffix != '.json' or not path.is_file():
         raise ValueError('report_file must be a saved tool_reports/*.json path from a tool reply')
-    if offset < 0 or not 1 <= limit <= 12000:
-        raise ValueError('report requires offset >= 0 and limit 1..12000 characters')
+    if offset < 0 or limit is not None and not 1 <= limit <= 12000:
+        raise ValueError('report requires offset >= 0 and limit 1..12000; omit limit to use its default')
     raw = path.read_bytes()
     sha = hashlib.sha256(raw).hexdigest()
     if not path.stem.endswith('_' + sha):
@@ -373,12 +389,16 @@ def read_report(run: Path, report_file: str, offset: int, limit: int, *, json_po
     if json_pointer is not None:
         from src.agent.runtime_roles.trial_feedback import bounded_json_view
         result = {'report_file': report_file, 'sha256': sha,
-                  **bounded_json_view(json.loads(raw), pointer=json_pointer, offset=offset,
+                  **bounded_json_view(json.loads(raw), pointer=json_pointer, offset=offset, limit=limit,
                       reference_for=lambda at, item: report_reference(report_file, sha, at, item))}
         if 'next_offset' in result:
             result['next'] = {'candidate': '', 'collection': 'report', 'report_file': report_file,
                               'json_pointer': json_pointer, 'offset': result['next_offset']}
+            if limit is not None:
+                result['next']['limit'] = limit
         return result
+    if limit is None:
+        limit = 8000
     text = raw.decode()
     page = text[offset:offset + limit]
     return dict(report_file=report_file, sha256=sha, text=page, offset=offset,

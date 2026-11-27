@@ -6,6 +6,7 @@ Generic source revisions deliberately do not inherit that claim.
 from __future__ import annotations
 
 import copy
+from collections import Counter
 import hashlib
 import json
 import os
@@ -189,6 +190,77 @@ def _base(toolkit, candidate, draft):
     return _load((folder / "parametric_plan.json").read_bytes()), state, candidate
 
 
+def _outline_movements(rejections, plan):
+    """Group identical observed movements while retaining each independent declaration."""
+    groups = {}
+    for row in rejections:
+        if row.get('code') != 'outline_displacement_exceeded' or 'parametric_pointer' not in row:
+            continue
+        vertex = row['worst_vertex']
+        key = (row['frame_id'], tuple(vertex['before']), tuple(vertex['after']), row['limit_m'])
+        group = groups.setdefault(key, dict(frame=row['frame_id'], before=vertex['before'],
+            attempted=vertex['after'], limit_m=row['limit_m'], declarations=[]))
+        group['declarations'].append(row['parametric_pointer'])
+    if not groups:
+        return {}
+    summary = {'group_count': len(groups), 'groups': [], 'shown_declarations': 0,
+               'total_declarations': sum(len(group['declarations']) for group in groups.values())}
+    for group in groups.values():
+        # Leave room for the draft hash and the first complete raw rejection in a short tool window.
+        item = {**group, 'declarations': group['declarations'][:16],
+                'total_declarations': len(group['declarations'])}
+        if len(_json([*summary['groups'], item]).encode('utf-8')) <= 3600:
+            summary['groups'].append(item)
+            summary['shown_declarations'] += len(item['declarations'])
+    try:
+        from src.agent.geometry.parametric_proposal import expand_parametric_instances
+        counts = Counter(instance['template'] for instance in expand_parametric_instances(plan))
+        affected = {row['template'] for row in rejections if 'parametric_pointer' in row}
+        counts = {name: counts[name] for name in sorted(affected)}
+        if len(_json(counts).encode('utf-8')) <= 700:
+            summary['instances_using_each_template'] = counts
+    except (KeyError, TypeError, ValueError):
+        # The ring gate runs before expansion. Unvalidated instance data cannot supply counts.
+        pass
+    summary['basis'] = ('Equal observed and attempted XY in the same modelling frame. '
+                        'Review each declaration against its evidence; attempted coordinates are not a repair.')
+    return {'outline_movements': summary}
+
+
+def _regularization_diagnostics(toolkit, state):
+    audit = state.get("regularization_failure")
+    if not isinstance(audit, dict):
+        return None
+    reference = state.get("regularization_failure_reference")
+    if reference:
+        path = _inside(toolkit, toolkit.run / reference["file"])
+        if _sha(path) != reference.get("sha256") or _load(path.read_bytes()) != audit:
+            raise ValueError("saved regularization diagnostics changed")
+    from scripts.tool_scripts.bim_agent_replies import compact_reply
+    rejections = audit.get("rejections", [])
+    summary = {key: copy.deepcopy(audit[key]) for key in
+               ("status", "grid_m", "max_outline_displacement_m", "not_assessed", "required_next_check")
+               if key in audit}
+    if any('parametric_pointer' in row for row in rejections):
+        draft = _draft(toolkit, state['draft'])
+        if _sha(draft) != state['plan_sha256']:
+            raise ValueError('saved parametric draft changed')
+        summary.update(_outline_movements(rejections, _load(draft.read_bytes())))
+    summary.update(rejection_count=len(rejections), rejections=copy.deepcopy(rejections[:4]))
+    summary["repair_hint"] = (
+        "Inspect each rejection's path, before/after vertex and supporting lines. "
+        "Patch the preserved draft using its current plan_sha256. For an unintended "
+        "ruler, declare modelling.frames explicitly. Without an explicit override, "
+        "a template using one primitive frame inherits it as the architectural ruler; "
+        "mixed frames fall back to identity. Read get_bim_reference(topic='parametric') "
+        "for the declaration and patch format.")
+    result = compact_reply(toolkit.run, "parametric_failure", summary, full_result=audit, force=True)
+    result["read_all_rejections"] = {"tool": "read_candidate_items", "arguments": {
+        "candidate": "", "collection": "report", "report_file": result["details_file"],
+        "json_pointer": "/rejections"}}
+    return result
+
+
 def _failure(toolkit, action, error, *, state=None, stage="parametric_input", details=None, edit_route=None,
              failed_batch=None):
     result = saved_result({"status": "error", "error": str(error), "error_stage": stage,
@@ -202,6 +274,9 @@ def _failure(toolkit, action, error, *, state=None, stage="parametric_input", de
         result["edit_route"] = draft_edit_route(toolkit, state["draft"])
     if details is None:
         details = getattr(error, "details", None)
+    regularization = _regularization_diagnostics(toolkit, state) if state else None
+    if regularization:
+        details = {**(details or {}), "regularization": regularization}
     if details:
         result["error_details"] = details
     if edit_route is not None:
@@ -412,6 +487,21 @@ def _build(toolkit, plan_json, *, action, base=None, patch=None, parent=None,
     else:
         state["status"] = "build_rejected"
         result["parametric"] = state
+        if result.get('error_stage') == 'source_hard_constraints':
+            from src.agent.geometry.parametric_proposal import parametric_space_locations
+            refused = result['regularization']
+            source_ids = {sid for row in refused['rejections'] for line in row.get('lines', [])
+                          for sid in line.get('source_space_ids', [])}
+            if source_ids:
+                locations = parametric_space_locations(plan, sorted(source_ids))
+                shown = []
+                for item in locations.values():
+                    if len(_json([*shown, item]).encode('utf-8')) > 3000:
+                        break
+                    shown.append(item)
+                result.setdefault('error_details', {})['alignment_spaces'] = {
+                    'affected_source_space_count': len(source_ids), 'shown': shown,
+                    'read_all_rejections': {**refused['read']['arguments'], 'json_pointer': '/rejections'}}
     if field_feedback and (not candidate or result.get("error")):
         result["error_details"] = {**result.get("error_details", {}), **field_feedback}
     _write(path.with_suffix(".state.json"), state)
@@ -556,6 +646,13 @@ def inspect_parametric(toolkit, candidate: str = "", *, draft: str = "",
                              ("base", "patch", "proposal_sha256", "source_file_sha256",
                               "feedback_parent", "feedback_parent_unavailable",
                               "architectural_regularization") if key in state}
+        if state.get("error"):
+            result["draft_error"] = state["error"]
+            from scripts.tool_scripts.bim_agent_edit_route import draft_edit_route
+            result["edit_route"] = draft_edit_route(toolkit, state["draft"])
+        regularization = _regularization_diagnostics(toolkit, state)
+        if regularization:
+            result["error_details"] = {"regularization": regularization}
         if pointer is not None or full:
             pointer = pointer if pointer is not None else ""
             result.update(_selection(_select(plan, _tokens(pointer)), pointer, max_chars, offset))

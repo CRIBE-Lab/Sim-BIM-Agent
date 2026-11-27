@@ -142,6 +142,26 @@ def expand_parametric_instances(plan: dict) -> list[dict]:
     return _instance_records(plan)[0]
 
 
+def parametric_space_locations(plan, identities):
+    """Resolve expanded instance spaces to the declarations controlling their shape and placement."""
+    from src.agent.geometry.parametric_validation import _pointer
+    instances, groups = _instance_records(plan)
+    names = {row['id']: row['template'] for row in instances}
+    placements = {row['id']: f'/instances/{i}' for i, row in enumerate(plan['instances'])}
+    for i, repeat in enumerate(plan.get('repeats', [])):
+        placements.update(dict.fromkeys(groups[repeat['id']], f'/repeats/{i}'))
+    spaces = {(name, space['id']): i for name in set(names.values())
+              for i, space in enumerate(plan['templates'][name]['spaces'])}
+    result = {}
+    for identity in identities:
+        instance, _, local = identity.partition(':')
+        name = names.get(instance)
+        if (name, local) in spaces:
+            result[identity] = dict(id=identity, parametric_placement=placements[instance],
+                parametric_space=_pointer(('templates', name, 'spaces', spaces[name, local])))
+    return result
+
+
 def _evidence(row, instance):
     return dict(source_refs=strings(row['source_refs'], True) + strings(instance.get('source_refs', [])),
                 assumptions=strings(row.get('assumptions', [])) + strings(instance.get('assumptions', [])))

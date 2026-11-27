@@ -48,7 +48,7 @@ LOCAL_OBSERVER_TOOL_NAMES = (
     "map_dimension_chain", "compare_facade_spans", "map_pixels", "read_candidate_items",
 )
 COORDINATOR_ONLY_TOOL_NAMES = (
-    "record_inference", "inspect_inference", "audit_inference_candidate",
+    "record_inference", "inspect_inference", "audit_inference_candidate", "record_sim_inspection",
     "inspect_plan_draft", "revise_plan_bim", "view_plan_wall_support",
     "claim_transaction", "replace_claim_sources", "claim_status", "check_wall_dimensions", "inspect_candidate",
     "check_source_space_relation", "check_openings",
@@ -159,6 +159,7 @@ def frozen_bim_client(
         args=args,
         cwd=root,
         run_directory=run,
+        env={"PYTHONUTF8": "1"},
     )
 
 
@@ -532,8 +533,8 @@ def write_frozen_materials(output_directory: Path, *, repository_root: Path) -> 
         relative: metadata["sha256"] for relative, metadata in version["files"].items()
     }
     prompts = {
-        "drawing_system_prompt.txt": build_guide(images="drawings", mesh=False),
-        "mesh_system_prompt.txt": build_guide(images="mesh_views", mesh=True),
+        "drawing_system_prompt.txt": build_guide(images="drawings", mesh=False, sim_inspection=True),
+        "mesh_system_prompt.txt": build_guide(images="mesh_views", mesh=True, sim_inspection=True),
     }
     for name, text in prompts.items():
         (output / name).write_text(text, encoding="utf-8")

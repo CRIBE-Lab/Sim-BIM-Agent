@@ -13,7 +13,7 @@ import json
 import math
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any, Mapping
@@ -189,6 +189,16 @@ def get_model_profile(model: str, *, strict: bool = False) -> ModelProfile:
     if strict:
         raise ValueError(f"no reviewed estimation profile for model {model!r}")
     return conservative_compatibility_profile(model)
+
+
+def custom_chat_profile(model):
+    # A user-defined endpoint can route a known slug to an entirely different model.
+    # Estimate image occupancy using the existing conservative patch proxy; the
+    # connection's user-configured window is independently enforced by RunLimits.
+    return replace(conservative_compatibility_profile(model),
+                   image_estimator="openai_patch32_proxy_v1",
+                   image_source="Estimated from 32-pixel patches; custom endpoint tokenizer is unknown",
+                   image_uncertainty="The custom endpoint may resize or tokenize images differently")
 
 
 _APPROXIMATE_TOKEN = re.compile(

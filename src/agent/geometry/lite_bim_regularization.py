@@ -113,7 +113,8 @@ def regularize_lite_plan(plan: dict, *, image_size: tuple[int, int], image_name:
               "junction_preparation": preparation, "items": [], "rejections": []}
     if merge_report is not None:
         report['wall_merging'] = merge_report
-        report['wall_policy'] = {'thickness_step_m': .01, 'merge_tolerance': '2 * max(thickness)',
+        report['wall_policy'] = {'thickness_step_m': .01, 'thickness_step_applies_to': 'inferred',
+                                 'merge_tolerance': '2 * max(thickness)',
                                  'anchor': 'existing evidence-supported line; never average'}
 
     def reject(message, **details):

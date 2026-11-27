@@ -10,7 +10,7 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 
 from src.agent.runtime_delivery import completed_building_handoff
-from src.agent.runtime_entry import ROOT, parser as single_parser, prepare_inputs, publish_tool_budget
+from src.agent.runtime_entry import ROOT, admitted_thickness_candidates, parser as single_parser, prepare_inputs, publish_tool_budget
 from src.agent.runtime_tools import FrozenBimCatalog, FrozenBimTools, coordinator_role, frozen_bim_client, write_frozen_materials, write_frozen_tool_catalog
 from src.agent_runtime.adapter import ScriptedAdapter
 from .context_policy import context_policy_from_effective, effective_role_context
@@ -83,6 +83,7 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
     source = None
     continuation = None
     source_path = getattr(args, "continue_from", None)
+    thickness = getattr(args, "thickness_candidates_mm", None)
     source_digest = getattr(args, "source_events_sha256", None)
     if bool(source_path) != bool(source_digest):
         raise ValueError("continuation requires both source path and approved journal SHA-256")
@@ -93,6 +94,7 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
             raise ValueError("continuation needs a separate new run directory")
         limits, continuation = continuation_allowance(source, limits, expected_events_sha256=source_digest)
         prior = source.verified_role_configuration()
+        thickness = admitted_thickness_candidates(source.read_json("bim/inputs.json"), thickness)
         for key, expected in {
             "roles": {name: route.model_dump(mode="json") for name, route in routes.items()},
             "global_context": global_context,
@@ -151,9 +153,12 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
         output.mkdir(parents=True, exist_ok=False)
         run, _, task = prepare_inputs(output, images=args.images, mesh=None, building_input=args.building_input,
             scope=args.scope, image_kind="drawings", max_candidates=args.max_candidates,
-            floor_plan_images=args.floor_plan_images, started_epoch=time.time(), seconds=limits.seconds)
+            floor_plan_images=args.floor_plan_images, started_epoch=time.time(), seconds=limits.seconds,
+            thickness_candidates_mm=thickness)
         (output / "guide.txt").write_text(guide, encoding="utf-8", newline="\n")
     manifest = json.loads((run / "inputs.json").read_bytes())
+    if args.resume:
+        admitted_thickness_candidates(manifest, thickness)
     parameters = role_parameters(primary)
     scripted = json.loads(args.script.read_bytes()) if args.script else None
     if scripted is not None and not isinstance(scripted, dict):
@@ -305,13 +310,15 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
                 }
             store.write_json("receipt.json", result)
             from src.agent.bim_inputs import dump
+            from src.agent.runtime_delivery import publish_completed_model
+            publish_completed_model(output, result)
             delivery = result.get("finalization", {}).get("delivery")
             dump(run / "summary.json", {
                 "input_mode": manifest.get("input_mode"), "source_input_mode": manifest.get("source_input_mode"),
                 "input_contents": manifest.get("input_contents"),
                 "agent_response_completed": result["status"] == "completed", "runtime_status": result["status"],
                 "elapsed_seconds": result.get("elapsed_seconds"),
-                "delivery": ({**delivery, "report": "delivery.json", "viewer": "delivery.html"} if delivery else None),
+                "delivery": ({**delivery, "report": "delivery.json", "viewer": f"{delivery['candidate']}/viewer.html"} if delivery else None),
                 "receipt": "../receipt.json", "drawing_fidelity": "not_evaluated", "runtime_mode": "role_division"})
     from src.agent.runtime_behaviour import write_behaviour_report
     write_behaviour_report(output / "events.jsonl", output / "behaviour")
@@ -321,7 +328,8 @@ async def execute(args, *, adapter_factory=None, fault_hook=None, reader_fault_h
 def main():
     args = parser().parse_args()
     result = asyncio.run(execute(args))
-    print(json.dumps({"status": result["status"], "usage": result["role_accounting"]}, ensure_ascii=False))
+    print(json.dumps({"status": result["status"], "usage": result["role_accounting"],
+                      **({"viewer": result["viewer"]} if "viewer" in result else {})}, ensure_ascii=False))
     raise SystemExit(0 if result["status"] == "completed" else 1)
 
 

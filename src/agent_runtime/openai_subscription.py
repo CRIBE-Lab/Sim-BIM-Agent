@@ -119,6 +119,9 @@ class _WindowsDpapiProtector:
 
     _CRYPTPROTECT_UI_FORBIDDEN = 0x01
 
+    def __init__(self, entropy: bytes = _DPAPI_ENTROPY) -> None:
+        self._entropy = entropy
+
     @staticmethod
     def _blob(value: bytes) -> tuple[_DataBlob, Any]:
         buffer = ctypes.create_string_buffer(value)
@@ -129,7 +132,7 @@ class _WindowsDpapiProtector:
         if os.name != "nt":
             raise SubscriptionAuthError("Windows DPAPI is unavailable on this platform.")
         input_blob, input_buffer = self._blob(value)
-        entropy_blob, entropy_buffer = self._blob(_DPAPI_ENTROPY)
+        entropy_blob, entropy_buffer = self._blob(self._entropy)
         output_blob = _DataBlob()
         crypt32 = ctypes.windll.crypt32
         kernel32 = ctypes.windll.kernel32
@@ -393,6 +396,16 @@ class SubscriptionCredentials:
     ``transport`` exists for deterministic offline tests.  Production callers
     should leave it unset so HTTPS uses httpx's normal verified TLS transport.
     """
+
+    @classmethod
+    def legacy_project_registration(cls) -> "SubscriptionCredentials":
+        """Open this application's pre-rename store with its original DPAPI entropy."""
+        if os.name != "nt" or not os.environ.get("LOCALAPPDATA"):
+            raise SubscriptionAuthError("Legacy project registration requires Windows LOCALAPPDATA.")
+        directory = Path(os.environ["LOCALAPPDATA"]) / "EnergyPlus-Agent" / "openai-subscription"
+        if not (directory / "credentials.bin").is_file():
+            raise SubscriptionAuthError("No legacy project subscription registration exists.")
+        return cls(directory, _protector=_WindowsDpapiProtector(b"EnergyPlus-Agent/openai-subscription/v1"))
 
     def __init__(
         self,

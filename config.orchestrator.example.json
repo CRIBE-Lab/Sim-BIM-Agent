@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "batch_id": "building-a",
+  "approval_required_before_launch": true,
+  "maximum_seconds_per_case": 5400,
+  "input_root": "D:/Sim-BIM-Data/inputs",
+  "run_root": "D:/Sim-BIM-Data/runs",
+  "cases": [
+    {
+      "case_id": "building-a",
+      "mode": "orchestrator",
+      "runtime": "dsh",
+      "materials": {
+        "images": "building-a/drawings"
+      },
+      "scope": "根据提供的建筑资料生成可查看的完整轻量 BIM。保留可观察的楼层、空间、边界、开口和连接，注明推断及尚未解决的问题。",
+      "output": "building-a-001",
+      "provider": "chatgpt-subscription",
+      "model": "gpt-6.2-sol",
+      "reasoning_effort": "high",
+      "output_tokens": 32000,
+      "context_tokens": 500000,
+      "max_candidates": 256,
+      "image_history_batches": 3,
+      "worker": {
+        "model": "gpt-6.1-terra",
+        "reasoning_effort": "high",
+        "output_tokens": 32000,
+        "max_concurrent": 2
+      },
+      "limits": {
+        "model_calls": 100,
+        "tool_calls": 500,
+        "seconds": 5400,
+        "tokens": null,
+        "time_budget_mode": "wall"
+      }
+    }
+  ]
+}

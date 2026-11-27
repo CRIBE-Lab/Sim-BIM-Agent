@@ -6,12 +6,13 @@ import re
 
 from shapely.geometry import LineString, Point, Polygon
 
+from src.agent.geometry.storey_codes import public_storey_codes
 from src.agent.roles import ROOM_TYPES, normalize
 
 
 # This is naming comparison precision, not a geometry snapping tolerance.
 ROW_TOLERANCE_M = 1e-6
-SCHEME_VERSION = "bim_names_v3"
+SCHEME_VERSION = "bim_names_v4"
 
 
 _NAME_QUANT = 6
@@ -111,9 +112,7 @@ def geometry_key(vertices):
 
 def build_public_names(source: dict) -> dict:
     floors = sorted(source["floors"], key=lambda f: (f["z_floor"], f["id"]))
-    # F# is an ordinal, including annex/vertical groups; source labels stay
-    # separate and do not imply geographic/architectural storey identity.
-    floor_names = {f["id"]: f"F{i}" for i, f in enumerate(floors, 1)}
+    floor_names = public_storey_codes(floors)
     floor_order = {f["id"]: i for i, f in enumerate(floors)}
     polys = {s["id"]: Polygon(s["polygon"], s.get('holes', [])) for s in source["spaces"]}
     points = [p for f in floors for p in f["footprint"]]
@@ -216,32 +215,51 @@ def public_reference_text(value: object, references: dict) -> str:
     return re.sub(pattern, lambda match: references[match[0]], text)
 
 
-def viewer_names(data: dict, parts: dict) -> dict:
+def viewer_names(data: dict, parts: dict, *, names: dict | None = None, draft_anchors=False) -> dict:
     """Name disposable clickable fragments without rewriting IDs or geometry."""
     source = data.get("source_model") or {}
-    names = public_names_for_display(source)
+    if names is None:
+        names = public_names_for_display(source)
     derived = source.get("derived", {})
-    surfaces = {s["name"]: names.get("boundaries", {}).get(derived.get("surfaces", {}).get(s["name"], s["name"]), s["name"])
-                for s in data.get("surfaces", [])}
+    # Raw fragment/mesh identifiers in incomplete archives can contain authored
+    # prose in any language. Give orphan faces public identities of their own.
+    boundary_ids = derived.get("surfaces", {})
+    surface_ids = {s["name"] for s in data.get("surfaces", [])} | set(parts)
+    surface_ids.update(o["parent"] for k in ("windows", "openings") for o in data.get(k, []) if o.get("parent"))
+    region_ids = {r["boundary_id"] for r in data.get("enclosure_regions", [])}
+    source_ids = {boundary_ids.get(sid, sid) for sid in surface_ids} | region_ids
+    public_faces = dict(names.get("boundaries", {}))
+    for i, bid in enumerate(sorted(source_ids - public_faces.keys()), 1):
+        public_faces[bid] = f"Surface{i}"
+    surfaces = {sid: public_faces[boundary_ids.get(sid, sid)] for sid in surface_ids}
+    if draft_anchors:
+        # The first viewer stored the raw display name of an unmapped face as
+        # its annotation anchor (including an aperture's missing parent).
+        surfaces = {sid: names["boundaries"].get(boundary_ids.get(sid, sid), sid)
+                    for sid in surface_ids}
     objects = dict(surfaces)
     for kind in ("windows", "openings"):
-        for o in data.get(kind, []):
+        for i, o in enumerate(sorted(data.get(kind, []), key=lambda obj: obj["name"]), 1):
             oid = derived.get(kind, {}).get(o["name"], o.get("source_opening_id", o["name"]))
-            bid = derived.get("surfaces", {}).get(o["parent"], o["parent"])
-            objects[o["name"]] = names.get("opening_sides", {}).get(oid, {}).get(bid, names.get("openings", {}).get(oid, o["name"]))
+            bid = boundary_ids.get(o["parent"], o["parent"])
+            fallback = o["name"] if draft_anchors else (f"Window{i}" if kind == "windows" else f"Opening{i}")
+            objects[o["name"]] = (names.get("opening_sides", {}).get(oid, {}).get(bid)
+                                  or names.get("openings", {}).get(oid) or fallback)
     fragment_names = {}
     for sid, rows in parts.items():
         ranks = {i: rank for rank, i in enumerate(sorted(range(len(rows)), key=lambda i: (
             geometry_key(rows[i]["verts"]), tuple(sorted(geometry_key(h) for h in rows[i].get("holes", []))))), 1)}
-        fragment_names[sid] = [surfaces.get(sid, sid) + (f"_Part{ranks[i]}" if len(rows)>1 else "") for i in range(len(rows))]
+        fragment_names[sid] = [surfaces[sid] + (f"_Part{ranks[i]}" if len(rows)>1 else "") for i in range(len(rows))]
     regions = data.get("enclosure_regions", [])
     region_names = [""] * len(regions)
     grouped = defaultdict(list)
     for i, r in enumerate(regions):
-        grouped[(r["boundary_id"], r["condition"])].append(i)
+        condition = r["condition"].title() if draft_anchors else ("Open" if r["condition"] == "open" else "Unknown")
+        grouped[(r["boundary_id"], condition)].append(i)
     for (bid, condition), indices in grouped.items():
         for rank, i in enumerate(sorted(indices, key=lambda i: geometry_key(regions[i]["verts"])), 1):
-            region_names[i] = names.get("boundaries", {}).get(bid, bid) + f"_{condition.title()}{rank}"
+            parent = names["boundaries"].get(bid, bid) if draft_anchors else public_faces[bid]
+            region_names[i] = f"{parent}_{condition}{rank}"
     edges = {}
     for obj in data.get("surfaces", []) + data.get("windows", []) + data.get("openings", []):
         vs = obj["verts"]
@@ -249,7 +267,7 @@ def viewer_names(data: dict, parts: dict) -> dict:
         rank = {i:n for n,i in enumerate(order, 1)}
         edges[obj["name"]] = [f"{objects[obj['name']]}_Edge{rank[i]}" for i in range(len(vs))]
     floors = sorted(source.get("floors", []), key=lambda f: (f["z_floor"], f["id"]))
-    return {"floors": [{"id": f["id"], "name": f"F{i}",
+    return {"floors": [{"id": f["id"], "name": names.get("floors", {}).get(f["id"], f"F{i}"),
                        "source_name": f.get("name") or f["id"], "z_floor": f["z_floor"]}
                       for i, f in enumerate(floors, 1)],
             "spaces": names.get("spaces", {}), "objects": objects, "parts": fragment_names,

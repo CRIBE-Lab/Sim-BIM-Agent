@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from scripts.tool_scripts.bim_agent_guidance import build_guide
+from scripts.tool_scripts.bim_agent_guidance import SIM_BIM_DELIVERY_GUIDE, build_guide
 from src.agent.runtime_roles.readers import READER_TOOL_NAMES
 from src.agent.roles import room_types_reference
 from .plan_format import READER_PLAN_EXAMPLE
@@ -47,7 +47,7 @@ chain for an uncertain or conflicting span, not for every clear opening. Code ac
 shared nodes and adopts 0.1 m coordinates while retaining readings. Do not hand-round or
 remeasure merely to remove sub-grid tails.
 
-Every wall needs positive thickness at 1 cm resolution. Use wall_metadata defaults for
+Keep a directly documented wall width at its stated precision. Adopt inferred widths on the 1 cm grid. Use wall_metadata defaults for
 footprint:* and partition:*, then only visible exceptions at footprint:<edge>,
 partition:<id> or partition:<id>:<segment>. Rows need thickness_m, evidence_status,
 short basis and source_refs. Batch defaults are inferred; observed requires direct evidence
@@ -254,7 +254,7 @@ when a reader can. Preserve unresolved evidence; check_openings reuses unchanged
 
 
 ROLE_GUIDANCE = {
-    "coordinator": COORDINATOR_GUIDANCE,
+    "coordinator": COORDINATOR_GUIDANCE + "\n" + SIM_BIM_DELIVERY_GUIDE,
     "plan_reader": PLAN_READER_GUIDANCE,
     "elevation_reader": ELEVATION_READER_GUIDANCE,
 }

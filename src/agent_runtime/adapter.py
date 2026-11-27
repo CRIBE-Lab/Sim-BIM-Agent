@@ -126,7 +126,7 @@ def prepare_request(*, store: EventStore, model: str, messages: list[dict],
                     model_profile: ModelProfile | None = None,
                     strict_model_profile: bool = False,
                     reasoning_history: str = "all"):
-    from .providers import is_deepseek_route
+    from .providers import is_deepseek_route, is_custom_provider
     deepseek = is_deepseek_route(versions.remote_model.route_id, model)
     if deepseek and reasoning_history != "all":
         raise ValueError("DeepSeek tool calls require reasoning_history=all")
@@ -171,11 +171,11 @@ def prepare_request(*, store: EventStore, model: str, messages: list[dict],
     if versions.remote_model.route_id == "opencode-go":
         from .opencode_go import chat_messages
         messages, message_sources = chat_messages(store, model, messages, message_sources)
-    elif versions.remote_model.route_id == "paratera":
+    elif versions.remote_model.route_id == "paratera" or is_custom_provider(versions.remote_model.route_id):
         messages, message_sources = _paratera_chat_messages(store, messages, message_sources)
     body = {"model": model, "messages": copy.deepcopy(messages),
             "stream": False, "n": 1, **copy.deepcopy(parameters)}
-    if deepseek:
+    if deepseek or is_custom_provider(versions.remote_model.route_id):
         body.pop("n")
     if versions.remote_model.route_id in {"glm-subscription", "opencode-go"}:
         # No unverified sampling count on the Coding Plan endpoint. Capture the
@@ -246,10 +246,11 @@ def prepare_request(*, store: EventStore, model: str, messages: list[dict],
 class HttpChatAdapter:
     """Credentials are used only in the header, never serialized to the journal."""
 
-    def __init__(self, *, base_url: str, api_key: str, transport=None, trust_env=True):
+    def __init__(self, *, base_url: str, api_key: str, transport=None, trust_env=True, allow_http=False):
         parsed = urlsplit(base_url)
-        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("base URL must be HTTPS and contain no credentials/query/fragment")
+        if (parsed.scheme not in ({"https", "http"} if allow_http else {"https"}) or not parsed.hostname
+                or parsed.username or parsed.password or parsed.query or parsed.fragment):
+            raise ValueError("invalid model API base URL or embedded credentials/query/fragment")
         self.endpoint = base_url.rstrip("/") + "/chat/completions"
         self.failure_provider = "glm" if parsed.hostname == "open.bigmodel.cn" else None
         self._key = api_key
@@ -264,7 +265,7 @@ class HttpChatAdapter:
         started = time.monotonic()
         try:
             response = await self.client.post(self.endpoint, content=request.wire_bytes,
-                headers={"Authorization": f"Bearer {self._key}",
+                headers={**({"Authorization": f"Bearer {self._key}"} if self._key else {}),
                          "Content-Type": "application/json"}, timeout=timeout)
         finally:
             self.last_send_timing["http_round_trip_seconds"] = time.monotonic() - started

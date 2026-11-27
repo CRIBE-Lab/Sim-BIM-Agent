@@ -46,9 +46,11 @@ def update_building_context(engine, event, raw_result):
                     continue
                 if isinstance(value, dict):
                     metadata.update(value)
-    if event.payload.tool_name in {"delegate_mesh_workers", "read_mesh_worker", "mesh_worker_state"}:
-        workers = (metadata.get("results", []) if event.payload.tool_name == "delegate_mesh_workers"
-                   else metadata.get("tasks", []) if event.payload.tool_name == "mesh_worker_state"
+    worker_tool = event.payload.tool_name
+    if worker_tool in {"delegate_mesh_workers", "read_mesh_worker", "mesh_worker_state",
+                       "delegate_workers", "read_worker", "worker_state"}:
+        workers = (metadata.get("results", []) if worker_tool in {"delegate_workers", "delegate_mesh_workers"}
+                   else metadata.get("tasks", []) if worker_tool in {"worker_state", "mesh_worker_state"}
                    else [metadata])
         for worker in workers:
             if not isinstance(worker, dict) or not worker.get("task_id"):
@@ -59,7 +61,7 @@ def update_building_context(engine, event, raw_result):
             save("mesh-worker:" + worker["task_id"], "evidence_reference", {
                 "task_id": worker["task_id"], "status": worker.get("status"),
                 "source_basis": worker.get("source_basis"), "record": ref.model_dump(mode="json"),
-                "read_tool": "read_mesh_worker",
+                "read_tool": "read_mesh_worker" if "mesh" in worker_tool else "read_worker",
                 "meaning": "worker advice on frozen evidence; coordinator judges applicability and quality",
             }, "inferred", engine._event_source(event))
     view_fields = ("view_id", "name", "image_sha256", "returned_png_sha256",

@@ -900,8 +900,12 @@ class ContextManager:
             if event:
                 events.append(event.event_id)
         selected = [r for r in self._history if r.history_id not in self._archived_history_ids]
-        image_history_ids = (self._retained_image_history(selected, required, views,
-            set(undelivered_image_event_ids)) if self.policy.image_history_batches is not None else None)
+        image_history_ids = recent_image_ids = None
+        if self.policy.image_history_batches is not None:
+            recent_image_ids, image_history_ids = self._retained_image_history(
+                selected, required, views, set(undelivered_image_event_ids))
+            if force_compact:
+                image_history_ids = recent_image_ids
         def assemble(records, notice):
             messages = [(self._project_image_history_message(r, r.history_id in image_history_ids)
                          if image_history_ids is not None else copy.deepcopy(r.message)) for r in records]
@@ -925,7 +929,13 @@ class ContextManager:
 
         messages, sources = assemble(selected, self._last_compaction)
         threshold = pressure_tokens if pressure_tokens is not None else self.policy.compact_at_tokens
-        if force_compact or (threshold is not None and estimate(messages, sources) >= threshold):
+        under_pressure = force_compact or (threshold is not None and estimate(messages, sources) >= threshold)
+        if under_pressure and image_history_ids != recent_image_ids:
+            # Optional comparison images must not crowd required current work out of the context.
+            image_history_ids = recent_image_ids
+            messages, sources = assemble(selected, self._last_compaction)
+            under_pressure = estimate(messages, sources) >= threshold
+        if under_pressure:
             protected = {r.history_id for r in self._history[:self.policy.preserve_initial_messages]}
             protected.update(r.history_id for r in selected if required & set(r.tags) or any(
                 key in self._retrieval_pins or self._images[key].view_id in views
@@ -994,10 +1004,6 @@ class ContextManager:
         # initial ingestion. It covers initial attachments after the first N.
         keep.update(r.history_id for r in selected if "runtime-initial-input" in r.tags)
         groups = _interaction_groups(selected)
-        image_batches = [group for group in groups if any(r.image_keys for r in group)
-                         and any(r.message.get("role") == "tool" for r in group)]
-        keep.update(r.history_id for group in image_batches[-self.policy.image_history_batches:]
-                    for r in group if r.image_keys)
         # Preserve exact occurrence identities, not every historical copy of
         # matching bytes. A repeated original in an old diagnostic is archived.
         for record in selected:
@@ -1015,7 +1021,54 @@ class ContextManager:
             latest = next((r for r in reversed(selected) if key in r.image_keys), None)
             if latest is not None:
                 keep.add(latest.history_id)
-        return keep
+        image_batches = [group for group in groups if any(r.image_keys for r in group)
+                         and any(r.message.get("role") == "tool" for r in group)]
+        recent = keep | {r.history_id for group in image_batches[-self.policy.image_history_batches:]
+                         for r in group if r.image_keys}
+        comparison = set(recent)
+        seen = set()
+        # Read the true interaction boundary, including intervening archived turns.
+        history_groups = _interaction_groups(self._history) if self._archived_history_ids else groups
+        for group in reversed(history_groups):
+            first = group[0]
+            if "runtime-state-snapshot" in first.tags:
+                continue
+            if first.history_id in self._archived_history_ids:
+                break
+            calls = first.message.get("tool_calls") or ()
+            if (first.message.get("role") != "assistant" or len(calls) != 1
+                    or calls[0].get("function", {}).get("name") != "read_context_image"):
+                break
+            images = [r for r in group if r.image_keys]
+            if not images:
+                continue  # A directory lookup or failed exact read introduced no image.
+            arguments = json.loads(calls[0]["function"]["arguments"])
+            key = self.image_key(arguments["view_id"], arguments["sha256"])
+            for record in images:
+                if key not in record.image_keys:
+                    raise ValueError("retrieved image presentation does not contain its requested identity")
+                if key not in seen:
+                    comparison.add(record.history_id)
+                    seen.add(key)
+                elif record.history_id not in keep:
+                    comparison.discard(record.history_id)
+        if comparison - recent:
+            # Respect configured image limits even before token pressure. Count actual
+            # occurrences on the wire, including protected originals and multi-image batches.
+            count = byte_count = 0
+            for record in selected:
+                if record.history_id not in comparison or not record.image_keys:
+                    continue
+                for block in record.message["content"]:
+                    if isinstance(block, dict) and block.get("type") == "image_url":
+                        url = block["image_url"]["url"]
+                        count += 1
+                        length = len(url) - url.index(",") - 1
+                        byte_count += length // 4 * 3 - int(url.endswith("=")) - int(url.endswith("=="))
+            if (self.policy.max_images is not None and count > self.policy.max_images
+                    or self.policy.max_image_bytes is not None and byte_count > self.policy.max_image_bytes):
+                comparison = recent
+        return recent, comparison
 
     def _project_image_history_message(self, record, retain):
         result = copy.deepcopy(record.message)

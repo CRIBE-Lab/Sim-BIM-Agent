@@ -467,8 +467,148 @@ Do not ask the user for routine geometry choices.
 """
 
 
-def build_guide(*, images=None, mesh=False):
+ORCHESTRATOR_GUIDE = """You are responsible for a single building model. The task and
+the supplied materials define what to recover, where to infer and which details
+matter. Identify what each material actually depicts, its scale, orientation,
+storeys, and the limits of its evidence. A measured plan can establish room
+boundaries and opening positions; a sketch can describe adjacency without metric
+accuracy. An elevation can establish window heads, sills and floor datums. A
+textured mesh can show the exterior while leaving the interior unknown. Link
+material descriptions to the named originals. Distinguish documented facts,
+user conjecture, your observations and your modelling assumptions.
+
+Read the relevant evidence at a scale where you can distinguish walls, doors,
+windows and passages. A door swing, dimension line, furniture or change of use
+alone does not divide a physical space. Keep the extent of an open room,
+including recesses and higher or stepped portions. Locate openings on the actual
+wall and storey, with the supported width, sill and head. For a door or passage,
+identify the spaces it really joins. Follow circulation from entrances to rooms
+and through the stairs and lift landings on the levels they serve. Preserve
+disconnected or unknown conditions where supported. Use material evidence for
+repeated floors and note which repetitions and exceptions you inferred. When
+detail is missing, choose a plausible simplification within the requested scope
+and record its basis. Do not add subdivisions, doors or windows merely to obtain
+regular geometry or a desired count.
+
+Keep evidenced entrances, cores and shared passages when simplifying an interior.
+Different entrances or uses can share an open space. For an inferred partition,
+consider what supports the wall's direction, where it would meet the facade or
+core, and whether the spaces on both sides are usable. An unexplained wedge
+calls that wall into question. If its course is unknown, keep the area open.
+Follow drawn partitions through genuine oblique turns and retain their openings.
+Use labels and furnishings to identify a plausible broad use. Record ambiguity
+between similar uses without changing the geometry to fit a label.
+
+Choose how to answer each building question. Direct inspection can settle a
+clear relationship; crop, measure or trial-build where a dimension, ambiguity
+or conflict matters. Put geometry in one metre-based frame with absolute floor
+levels. Use the drawings' orientation or preserve the mesh-to-BIM transform,
+and relate each auxiliary drawing to that frame. Save stable IDs and the reasons
+for material assumptions. Revisit the affected geometry when new evidence changes
+an earlier judgment.
+
+Use the tools available in this session. view_image takes an exact admitted image
+name and an optional box in original pixels. inspect_mesh, view_mesh and
+view_mesh_section inspect a supplied GLB. A section through the surface mesh
+does not reveal hidden partitions. build_plan_bim and assemble_plan_bim support
+measured plans. build_bim supports explicit geometry and build_parametric_bim
+can reuse repeated geometry. Read get_bim_reference('plan_partition'), 'geometry'
+or 'parametric' for your chosen format. inspect_candidate and local edits can
+answer a specific issue without rebuilding unaffected floors. If a worker is
+available, delegate a bounded question when its answer would help. Give it the
+relevant originals or snapshot, the question and the evidence you need back.
+Resolve contradictions and select the final source yourself.
+
+Compare the selected saved candidate to the evidence that bears on its envelope,
+storeys, spatial organization, opening hosts and circulation. Use a local overlay
+or elevation comparison for an uncertain or revised area. Finish when the requested
+scope is satisfied, consequential contradictions are addressed, and remaining
+uncertainties and simplifications are recorded. Complete intended edits before
+finish_bim. A successful finish can end the run immediately.
+"""
+
+ORCHESTRATOR_DRAWING_FINISH = """For image-only delivery, pass reviews_json to
+finish_bim as {"drawing_review":{"coverage":"whole_building","summary":"<scope checked
+against the actual inputs and saved source>","unresolved":["<remaining uncertainty>"]}}.
+Use an empty list if no uncertainty remains, or coverage="partial" for unfinished
+scope. The system binds the declaration to the current source and admitted
+materials and records its floor IDs. Where the task explicitly names required
+floor-plan files, the candidate also needs their image-to-floor coverage from
+plan construction/assembly or a validated calibrated plan-overlay review.
+If inputs lists an explicit drawing_review_policy, get_bim_reference('drawing_process')
+explains its extra local and building review requirements."""
+
+ORCHESTRATOR_MESH_FINISH = """For native mesh delivery, choose comparisons that
+resolve an actual building question or fulfill the user's requested checks.
+view_mesh(candidate=...) can show the source overlay on an original view,
+or use overlay_mesh_candidate with an existing observation. Pass reviews_json to
+finish_bim as {"mesh_review":{"coverage":"whole_building","summary":"<actual
+coverage and remaining uncertainty>","overlay_ids":["<current overlay ID>"]}}.
+List the current overlays actually inspected. Use [] when the handoff rests on
+other evidence and summarize that evidence and its limits. Use coverage="partial"
+if required scope is unfinished."""
+
+
+SPATIAL_GRADE_SCALE = """Grade each object's reconstructed position, shape and extent against the supplied evidence.
+5 Direct evidence: a plan, section, measurement or explicit dimension directly establishes this object's
+location and principal extents on the target storey.
+4 Strong support: documented geometry needs only a minor estimate, or a documented typical-storey
+template has evidence of repeating for this object on the target storey. Name the template and the
+evidence of applicability, such as a stated storey range or a matching measured envelope and floor pitch.
+3 Partial support: evidence fixes a significant part of this object's geometry, but a principal extent is
+inferred. A continuing lift shaft can anchor a lobby whose partitions on this storey are unknown.
+2 Indirect support: a layout elsewhere or a comparable space suggests a plausible position or shape,
+without a geometric anchor for this object here. A cubicle copied from another storey often fits here.
+1 Assumed: no applicable evidence locates or sizes this object; its geometry is a modelling assumption.
+Grade the zone, its faces and its openings independently. A repeated office envelope can merit 4 while
+local partitions or doorways merit 2 or 3. A copied model, floor name or room use alone cannot establish
+repetition. Cite applicable evidence for grades 2–5. Choose according to evidence, without grade quotas."""
+
+SIM_BIM_DELIVERY_GUIDE = """Deliver the whole building as a simulation-ready Sim-BIM and its interactive HTML
+unless the user specifies a narrower scope. Use the submitted building description and block captions as
+user statements; relate them to the actual drawings, mesh and declarations. A file number in a caption
+refers to its 1-based position within that block. Where a description is silent, work from the supplied sources.
+Use stable English ASCII identifiers for storeys, zones, surfaces and openings in every interface language.
+Give each storey one compact code (e.g. G for ground, U for upper ground, O01 for an office level,
+23F for a documented 23/F, R for roof). Reuse that code in all references to the same storey.
+The exporter assigns the standard zone, surface and edge names. Preserve original drawing labels in evidence.
+Before finish_bim assess every saved zone, boundary and opening. Give a short reason in English and Chinese
+naming the spatial evidence, where it applies and the main estimate. Assign broad room-use types to zones.
+For physical surfaces record a short bilingual observation about the principal construction material and
+the total component thickness in mm, with a separate source for each: from material, inference, or from user.
+Use each group's selected thickness candidates for inferred values, or ordinary modules when none were selected.
+Choosing a value from a shortlist is inference. Use from user for a thickness explicitly assigned to that component.
+Both sides of a shared construction use the same total thickness. Glazing uses total unit thickness including
+cavities. Material and thickness are independent of spatial confidence. Use get_bim_reference('sim_inspection')
+for the assessment schema and stage or submit inspection_json with the final candidate.
+""" + SPATIAL_GRADE_SCALE
+
+
+def describe_orchestrator_inputs(manifest: dict) -> str:
+    """Present admitted material identities without guessing content from filenames."""
+    lines = ["Materials supplied for this building:"]
+    if manifest.get("mesh_input"):
+        lines.append("- Original GLB with the building's surface geometry and available texture. "
+                     "Inspect it in its native frame.")
+    for name, image in manifest.get("images", {}).items():
+        width, height = image["size"]
+        lines.append(f"- {name}: supplied PNG, {width} × {height} original pixels.")
+    if manifest.get("building_input"):
+        lines.append("- Building declaration: inputs().building_input.declaration contains "
+                     "the supplied descriptions, their applicability and any stated sources.")
+    if manifest.get("floor_scope_source") == "explicit_input_filenames":
+        lines.append("Explicitly supplied floor-plan names: " + ", ".join(manifest["floor_plan_images"]) + ".")
+    return "\n".join(lines)
+
+
+def build_guide(*, images=None, mesh=False, orchestrator=False, sim_inspection=False):
     """System prompt for one run. images is drawings, mesh_views, photos, unknown or None."""
+    if orchestrator:
+        handoff = ORCHESTRATOR_MESH_FINISH if mesh else ORCHESTRATOR_DRAWING_FINISH
+        parts = [ORCHESTRATOR_GUIDE, handoff]
+        if sim_inspection:
+            parts.append(SIM_BIM_DELIVERY_GUIDE)
+        return "\n".join(parts)
     mesh_mode = mesh or images == "mesh_views"
     parts = [MESH_CORE if mesh_mode else CORE]
     if mesh_mode:
@@ -481,11 +621,67 @@ def build_guide(*, images=None, mesh=False):
         parts.append(MESH_VIEWS)
     if not mesh_mode and images in ("photos", "unknown"):
         parts.append(PHOTOS)
-    tools = TOOLS
-    return "\n".join(parts + [tools, DELIVERY])
+    parts.extend([TOOLS, DELIVERY])
+    if sim_inspection:
+        parts.append(SIM_BIM_DELIVERY_GUIDE)
+    return "\n".join(parts)
 
 
 REFERENCES = {
+    'sim_inspection': """Spatial evidence and simulation properties are attached to the actual source IDs.
+On production runs with spatial_assessment_policy=object_evidence_v1, assess EVERY space, boundary
+and opening. Stage partial batches with record_sim_inspection(candidate,inspection_json), or include the
+same packet in finish_bim. Unchanged objects retain their declarations on a source revision.
+Use {"rules":[...]} with ordered rules. kind is space, boundary or opening. all:true is the sole selector
+for a judgment applicable to an entire kind. Omit all when using any filter: ids, space_ids, floor_ids
+(lists of saved IDs), type (boundary: wall/floor/ceiling; opening: window/door/open; space: room-use code)
+or physical_only:true. On a delivered-model Edit, missing_spatial:true selects only objects still lacking a
+spatial assessment. It may set only spatial, including when combined with other filters. Use the revision_inspection
+coverage and selectors in the saved result. Group only objects with a common evidence basis and uncertainty.
+Filters intersect. Later rules replace only the supplied attributes. Read
+inspect_candidate/read_candidate_items for actual source IDs. An example fragment for a floor:
+{"kind":"space","floor_ids":["F1"],"spatial":{"grade":4,
+"reason":{"en":"Plan outlines the rooms; section height is approximate.","zh":"平面可见房间轮廓，层高为估算。"},
+"source_refs":["image:plan.png#F1 room outlines"]}}
+""" + SPATIAL_GRADE_SCALE + """
+A plan designated for a storey range or a matching measured module can establish a repeat. A shared
+floor name, room use or copied model geometry cannot establish it. A repeated facade and slab rhythm
+can support transferring an envelope without establishing the same tenant partitions or door locations.
+Assess setbacks, transfer storeys and changed openings against evidence for their own geometry.
+In the short bilingual reason, identify the observation or template, the link to this object and the
+principal uncertainty. Assign each grade on evidence, without targeting a distribution.
+For a grade above 1 cite at least one admitted source. Grade 1 may cite an empty list when inputs give
+no spatial clues. Never grade geometry from room use, material, thickness or number of references.
+Each source_refs entry is one of image:<exact admitted filename>, view:view_NNNN, mesh:original,
+mesh:mesh_NNN, section:section_NNN, brief, block:<admitted block ID with caption>,
+revision:<confirmed revisionEvidence key>, or input:/json/pointer
+into inputs().building_input.declaration. Append #<locator> for the specific region or statement.
+Private refs stay in the workspace. Keep paths and internal IDs out of the public bilingual reason.
+Keep spatial assessments on all boundaries and openings, including open interfaces. In a separate construction
+rule use physical_only:true to select boundary patches with positive solid area or filled openings. An entire wall
+can be consumed by an aperture. For example, {"kind":"boundary","type":"wall","physical_only":true,
+"thickness":{"value_mm":150,"source":"inference","source_refs":[]}} is a construction rule. Select a value
+appropriate to the inputs. For an unfilled passage keep only spatial attributes; null is not an override.
+Set material:{en,zh,source,source_refs} and thickness:{value_mm,source,source_refs} independently.
+Omit an unspecified field. Material describes the component's principal construction in a short, free-text observation in
+both languages. A single door leaf has one material description. An observation can say "The leaf appears
+metallic. Its core is unknown." Where only paint, tile, surface colour or wood grain is visible, qualify
+any inference about the underlying construction. Leave finish layers, precise assemblies and simulation libraries
+to the downstream plugin. Use "from user" when a caption, brief or declaration identifies the principal material
+for this element. Use "from material" when the supplied drawings or imagery support the observation itself.
+Use "inference" for a conclusion about an unseen material derived from building context. For each door check the
+connected rooms, lift shaft/landing, stair and exterior relation, and any visible entrance or glazing evidence.
+Apply those distinctions before grouping similar openings. Where information is missing state what is uncertain.
+These observations do not influence the spatial grade. A selected thickness shortlist is a constraint on an inferred
+choice and is not an explicit user assertion about that element. Wall, horizontal floor/ceiling, roof
+and total glazing thickness use their respective inputs().thickness_candidates_mm groups. For inferred
+values choose an admitted candidate if selected, otherwise a common module. Doors use ordinary inferred
+values. Use the full glazing unit thickness including cavities; do not construct layers or change opening
+geometry. Both sides of a physical component share its total thickness.
+For actual documented local changes, boundaries may carry thickness_regions:[{vertices:[[x,y,z],...],
+holes:[],thickness:{value_mm,source,source_refs}}].
+The component builder resolves shared component membership and fills missing physical properties with
+labelled inferences. Open-air/unknown separators have no material or thickness.""",
     'drawing_process': DRAWING_PROCESS_REFERENCE,
     'facade_correspondence': """Observe one facade's full opening list independently
 in the original plan and original elevation. Include doors and windows; retain
@@ -785,6 +981,8 @@ The example numbers/counts are unrelated to the supplied building.
  "reason":"explain","source_refs":["image: observation or explicit assumption"]};
 {"op":"update_opening","id":"D1","changes":{"p1":[3,1],"p2":[3,2]},
  "reason":"explain","source_refs":["image: observation or explicit assumption"]};
+{"op":"shift_window_heights","floor_ids":["F1","F2"],"sill_delta_m":0.15,"head_delta_m":0.15,
+ "reason":"raise the selected exterior windows","source_refs":["revision:confirmed-note-key"]};
 {"op":"move_shared_wall","space_ids":["F1_left","F1_right"],"coordinate_m":3.5,
  "reason":"explain observed partition displacement","source_refs":["plan: observed wall"]};
 {"op":"reshape_spaces","spaces":[{"id":"room-A","polygon":[[0,0],[3,0],[3,2],[0,2]]}],
@@ -796,7 +994,12 @@ The example numbers/counts are unrelated to the supplied building.
  "z":[0,2.1],"state":"unknown","assumptions":["height assumed"]},
  "reason":"new door observed","source_refs":["plan: door and both hosts"]};
 {"op":"set_notes","assumptions":["updated assumptions"],"unresolved":[]}.
-set_space_role only changes the selected room's catalog role and role_evidence;
+  shift_window_heights shifts the sill and/or head in metres (positive up, negative down) across both window
+  representations. The omitted endpoint keeps its height. Select all:true alone, exact floor_ids, exact proposal
+  window ids, or both filter lists. Floor selection includes windows on a spanning space where the original
+  aperture overlaps that storey. Every requested ID must belong to the selected exterior windows. Doors and
+  unfilled passages are excluded. Replace the example source reference with the actual instruction or evidence.
+  set_space_role only changes the selected room's catalog role and role_evidence;
 it preserves all geometry, IDs, openings, connections and geometry source notes.
 Read room_types first. basis is observed for explicit input labels/declarations,
 inferred for a plausible interpretation, including a broad use from building context
@@ -841,6 +1044,10 @@ It replaces one complete room and computes the adjacent room as the remainder of
 their original union; both stay single hole-free spaces. It refuses third-space
 encroachment, does not move apertures, and records before/after. Use explicit
 update_opening operations in the same revision when hosts or positions change.
+For a single straight partition translation, move only its two endpoints in the first room's saved ring.
+Both rooms retain their original vertex order. With an authored enclosure intent this operation checks that
+all declared faces, spatial classifications, enclosure contacts and opening hosts still match the parent.
+If the actual enclosure or an aperture must move, submit a revised proposal with the new bindings.
 reshape_spaces replaces only the listed existing space polygons, deriving their
 x/y bounds by code. It preserves other objects and NEVER moves or resizes an
 opening. Update all affected adjoining spaces in one operation; include explicit
@@ -909,6 +1116,9 @@ Example wall reference (unrelated to supplied drawings):
 offsets_m are signed along POSITIVE world x for a constant-x wall, or positive
 world y for a constant-y wall, independent of which room owns the boundary.
 Use offsets_m:null when unknown; thickness_m may also be null. Each reference
+can carry thickness_scope:"complete wall" when the drawing brackets the full assembly.
+Keep a partial layer or uncertain scope explicit in thickness_scope.
+Each wall reference
 covers one complete straight source wall and its congruent counterpart. Partial
 shared walls and explicit enclosure declarations are unsupported here. List only
 local evidence you have; do not fill all walls with one guessed thickness.
@@ -943,6 +1153,7 @@ that boundary requires explicit rebinding rather than silently reusing thickness
 """,
     'opening_review': """For a whole-floor plan review (without facade), use complete only after
 inspecting ALL openings of that kind on that floor; use partial for a local check.
+review_json.kind is door, window or passage. A source opening with kind=open is reviewed as kind=passage.
 One mark represents one aperture/connection, not a crop with several doors.
 Door swings, dimension ticks and window marks are different evidence. A note
 saying one door does not remove a second modeled door. A review binds the reviewed

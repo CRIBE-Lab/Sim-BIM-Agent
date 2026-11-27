@@ -203,8 +203,11 @@ def run_guide(run: Path) -> str:
     manifest = json.loads((run / "inputs.json").read_bytes())
     mesh = bool(manifest.get("mesh_input"))
     kind = manifest.get("image_kind") or (("unknown" if mesh else "drawings") if manifest.get("images") else None)
-    guide = build_guide(images=kind, mesh=mesh)
-    if manifest.get("drawing_review_policy"):
+    orchestrator = manifest.get("orchestrator") is True
+    from scripts.tool_scripts.bim_agent_inspection import POLICY as SPATIAL_POLICY
+    guide = build_guide(images=kind, mesh=mesh, orchestrator=orchestrator,
+                        sim_inspection=manifest.get("spatial_assessment_policy") == SPATIAL_POLICY)
+    if manifest.get("drawing_review_policy") and not orchestrator:
         from scripts.tool_scripts.bim_agent_guidance import DRAWING_PROCESS
         guide += "\n" + DRAWING_PROCESS
     return guide
@@ -280,6 +283,9 @@ def delivery_tool_reply(result: dict) -> dict:
         minimal['mesh_review'] = {key: result['mesh_review'][key] for key in
             ('status', 'complete_building', 'coverage', 'record_sha256', 'fidelity')
             if key in result['mesh_review']}
+    if 'drawing_review' in result:
+        minimal['drawing_review'] = {key: result['drawing_review'][key] for key in
+            ('status', 'complete_building', 'coverage', 'source_model_sha256', 'fidelity')}
     if 'facade_counts' in result:
         counts = result['facade_counts']
         minimal['facade_counts'] = {key: counts[key] for key in ('summary', 'delivery_blocked', 'status', 'reason') if key in counts}
@@ -300,12 +306,17 @@ class Toolkit:
         self.run = run.resolve()
         self.manifest = json.loads((self.run / "inputs.json").read_bytes())
         self.readonly = readonly
+        self.revision_mesh_cache = None
+        if not readonly and self.manifest.get("model_revision") and self.manifest.get("mesh_input"):
+            from scripts.tool_scripts.render_geometry_viewer import RevisionMeshCache
+            self.revision_mesh_cache = RevisionMeshCache()
 
     def candidate_budget(self):
         limit = self.manifest.get("max_candidates")
         if type(limit) is not int or limit <= 0:
             raise ValueError("max_candidates must be a positive integer")
         used = len(list(self.run.glob("candidate_*")))
+        used -= len(self.manifest.get("model_revision", {}).get("inheritedCandidates", []))
         return {"limit": limit, "used": used, "remaining": max(0, limit - used)}
 
     def claims(self):
@@ -362,6 +373,13 @@ class Toolkit:
             raise ValueError("only the coordinator may revise BIM")
         store = self.claims()
         submitted = json.loads(operations_json)
+        if submitted == [] and self.manifest.get("model_revision"):
+            # A materials/inspection or north-only edit needs a new candidate with exactly
+            # the previous geometry, including the previously accepted architectural adoption.
+            parent, source = store.candidate(candidate)
+            adopted = source["generation"]["provenance"].get("architectural_regularization")
+            return self.build(parent, action="revise_bim", parent=candidate, operations=[],
+                              architectural_regularization=adopted)
         def references(value):
             if isinstance(value, dict):
                 found = {value["claim"]} if isinstance(value.get("claim"), str) else set()
@@ -415,12 +433,17 @@ class Toolkit:
                                     if (kind, operation["id"]) in old_objects)
                 elif name == "move_shared_wall":
                     expected.update(("space", identity) for identity in operation["space_ids"])
+                elif name == "replace_space_region":
+                    expected.update(("space", operation[key]) for key in ("space_id", "neighbor_space_id"))
                 elif name == "reshape_spaces":
                     expected.update(("space", row["id"]) for row in operation["spaces"])
-                elif name not in {"set_component_thickness", "replace_note", "set_notes", "resolve_unbuilt_observation"}:
+                elif name not in {"set_component_thickness", "replace_note", "set_notes", "resolve_unbuilt_observation",
+                                  "shift_window_heights"}:
                     supported = False
             for audit in updated["geometry"].get("corrections", [])[len(parent["geometry"].get("corrections", [])):]:
                 expected.update(("opening", row["id"]) for row in audit.get("moved_openings", []))
+                if audit.get("operation") == "shift_window_heights":
+                    expected.update((row["target"], row["id"]) for row in audit["changes"])
             application.update(geometry_before_sha256=sha(geometry_state(parent)),
                 geometry_after_sha256=sha(geometry_state(updated)), changes=changes,
                 scope_check="checked" if supported else "not_supported_for_all_operations",
@@ -525,17 +548,20 @@ class Toolkit:
                         "Use supplied relevant elevations to check each floor's opening heights; "
                         "do not transfer a typical height to an unexamined opening family."}
 
-    def delivery(self, candidate, *, selection_origin, generation_status=None):
+    def delivery(self, candidate, *, selection_origin, generation_status=None, drawing_review=None):
         """Build the handoff from saved source/check records, never model prose."""
         from scripts.tool_scripts.bim_agent_saved_result import opening_delivery_summary
         path = self.candidate_path(candidate)
         source = json.loads((path / "source_model.json").read_bytes())
         result = {"candidate": candidate, "selection_origin": selection_origin,
+                  "locale": self.manifest.get("locale", "zh-CN"),
                   "viewer": f"{candidate}/viewer.html", "source_model": f"{candidate}/source_model.json",
                   "viewer_exists": (path / "viewer.html").is_file(),
                   "generation_status": generation_status or {"state":"in_progress"},
                   **opening_delivery_summary(self, source)}
         result["source_image_feedback"] = self._delivery_projection_status(candidate, source)
+        if (path / "sim_inspection.json").is_file():
+            result["sim_inspection"] = f"{candidate}/sim_inspection.json"
         result["space_relation_review"] = self.space_relation_status(source)
         result["input_view_status"] = self.input_view_status()
         if self.manifest.get("drawing_review_policy"):
@@ -553,6 +579,8 @@ class Toolkit:
         result["building_precision"] = building_precision(self, candidate, source)
         from scripts.tool_scripts.bim_agent_budget import saved_floor_status
         result["floor_completeness"] = saved_floor_status(self, candidate)
+        if drawing_review is not None:
+            result["drawing_review"] = drawing_review
         if self.manifest.get('mesh_input'):
             from scripts.tool_scripts.bim_agent_mesh_review import mesh_review_status
             result['mesh_review'] = mesh_review_status(self, candidate)
@@ -1034,7 +1062,8 @@ class Toolkit:
             if architectural_regularization is not None:
                 validate_build_regularization(self, proposal, architectural_regularization)
             elif not pixel_construction:
-                proposal, architectural_regularization = prepare_source_proposal(self, proposal, parent=parent)
+                proposal, architectural_regularization = prepare_source_proposal(
+                    self, proposal, parent=parent, revise=action == 'revise_bim')
         except ValueError as error:
             rejection = {"source_geometry_ready": False, "status": "rejected",
                          "error": str(error), "stage": "architectural_regularization"}
@@ -1044,8 +1073,10 @@ class Toolkit:
                 rejection["architectural_audit"] = error.audit_reference
             self.log(action, rejection)
             return saved_result(rejection, audit_written=True)
+        confirmed_offsets = []
         rejection = reject_source_proposal(
             self, proposal, plan_assembly=plan_assembly, parent=parent,
+            operations=operations if action == "revise_bim" else None, confirmed_offsets=confirmed_offsets,
             architectural_regularization=architectural_regularization if not pixel_construction else None)
         if rejection is not None:
             saved_result(rejection, audit_written=True)
@@ -1058,6 +1089,8 @@ class Toolkit:
                 raise ValueError('candidate mesh_frame must refer to the admitted original mesh')
         budget = self.candidate_budget()
         index = budget["used"] + 1
+        if self.manifest.get("model_revision"):
+            index = max((int(path.name.split("_")[1]) for path in self.run.glob("candidate_[0-9]*")), default=0) + 1
         if budget["remaining"] == 0:
             return saved_result({"error": "candidate budget exhausted; report saved partial results",
                     "candidate_budget": budget, "remaining_seconds": self.remaining_seconds()})
@@ -1068,6 +1101,13 @@ class Toolkit:
         if parent is not None:
             provenance.update(parent_candidate=parent,
                               parent_proposal_sha256=digest(self.candidate_path(parent)/"proposal.json"))
+        if confirmed_offsets:
+            provenance["confirmed_partition_offsets"] = confirmed_offsets
+        if self.manifest.get("model_revision"):
+            from src.agent.model_revision import child_north_axis
+            axis = child_north_axis(self)
+            if axis is not None:
+                provenance["north_axis"] = axis
         if plan_input is not None:
             provenance["plan_input"] = plan_input
         if claim_application is not None:
@@ -1077,8 +1117,23 @@ class Toolkit:
         if architectural_regularization is not None:
             provenance["architectural_regularization"] = architectural_regularization
         stage("admission_seconds")
+        from scripts.tool_scripts.bim_agent_inspection import POLICY, initial_snapshot, revision_spatial_feedback
+        needs_inspection = (self.manifest.get("spatial_assessment_policy") == POLICY or
+            (parent and any((self.candidate_path(parent) / name).is_file()
+                            for name in ["sim_inspection.json", "sim_inspection_draft.json"])))
+        revision_inspection = {}
+
+        def build_inspection(source):
+            assessment = initial_snapshot(self, source, parent)
+            if self.manifest.get("model_revision"):
+                revision_inspection.update(revision_spatial_feedback(source, assessment))
+            return assessment
+
         report = export_source_proposal(proposal, self.run/candidate, provenance=provenance,
+            inspection_builder=build_inspection if needs_inspection else None,
+            locale=self.manifest.get("locale", "zh-CN"),
             mesh_path=self.run/'assets'/'input.glb' if proposal.get('mesh_frame') else None,
+            revision_mesh_cache=self.revision_mesh_cache,
             vertical_continuity_policy=self.manifest.get('vertical_continuity_policy'))
         stage("export_seconds")
         if operations is not None:
@@ -1086,6 +1141,8 @@ class Toolkit:
         result = {"candidate": candidate, "remaining_seconds": self.remaining_seconds(), **report,
                   "candidate_budget": self.candidate_budget(),
                   "input_view_status": self.input_view_status()}
+        if revision_inspection:
+            result["revision_inspection"] = revision_inspection
         if architectural_regularization is not None:
             result["architectural_regularization"] = architectural_regularization
         if plan_assembly is not None:
@@ -2256,8 +2313,15 @@ def build_tool_server(run: Path, readonly=False):
                      "trigger_action": "mcp_result_packaging"})
         from scripts.tool_scripts.bim_agent_replies import compact_reply
         result = compact_reply(toolkit.run, "build_bim", result)
+        if result.get("status") in {"error", "rejected"} and (result.get("draft") or result.get("error_details")):
+            # DSH may retain only the first part of a long MCP error. Show the
+            # exact editable base and actionable diagnostics before audit history.
+            first = ("status", "error", "error_stage", "stage", "draft", "plan_sha256", "draft_sha256",
+                     "saved_candidate", "details_file", "error_details")
+            result = {**{key: result[key] for key in first if key in result}, **result}
         content.append(TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":"))))
-        return CallToolResult(content=content, structuredContent=result)
+        return CallToolResult(content=content, structuredContent=result,
+                              isError=result.get("status") in {"error", "rejected"})
 
     @server.tool()
     def map_pixels(points: list[list[float]], x_anchors: list[list[float]],
@@ -2294,27 +2358,31 @@ def build_tool_server(run: Path, readonly=False):
         collection=report reads a returned details_file via report_file, with
         candidate="" and offset/limit in characters (limit up to 12000).
         Optional json_pointer browses that exact report as bounded JSON; offset
-        then counts container children or text characters. Follow returned next.
+        then counts container children (up to 8) or text characters (up to 600).
+        limit can request a smaller page. Follow the returned next arguments.
         collection=boundaries reads actual saved source boundary IDs, vertices,
         adjacency and opening_ids, with source file/model hashes. Wall IDs can
         scope overlay_mesh_candidate. floor_id includes spanning spaces. Large
         boundary records expose a bounded view and immutable details_file.
-        Each cell includes floor_id. Read next_offset for more; page_is_partial
+        For candidate collections offset counts rows and limit is 1..50. Each cell
+        includes floor_id. Read next_offset for more; page_is_partial
         means this is not a complete build_bim input. Prefer revise_bim to keep
         unexamined objects. Other collections read the proposal. These are saved
         model records, not original mesh/GT observations.
         """
-        if limit is None:
-            limit = 8000 if collection == 'report' else 20
         if collection == 'report':
             from scripts.tool_scripts.bim_agent_replies import read_report
             return read_report(toolkit.run, report_file, offset, limit, json_pointer=json_pointer)
+        if limit is None:
+            limit = 20
         if json_pointer is not None:
             raise ValueError('json_pointer requires collection=report and its saved report_file')
         if collection not in {'cells','windows','openings','unsupported','boundaries'}:
             raise ValueError('collection must be cells, windows, openings, unsupported or boundaries')
         if not 1 <= limit <= 50 or offset < 0:
-            raise ValueError('requires offset >= 0 and limit 1..50')
+            raise ValueError(f'{collection} pages require offset >= 0 and limit 1..50 rows. '
+                             'Keep the candidate, collection and floor filters; retry with '
+                             f'offset={max(0, offset)}, limit={max(1, min(limit, 50))}, then follow next_offset.')
         path = toolkit.candidate_path(candidate)
         if collection == 'boundaries':
             from src.agent.geometry.source_model import _digest
@@ -2683,6 +2751,7 @@ def build_tool_server(run: Path, readonly=False):
         def check_openings(candidate: str, review_json: str = "", heights_only: bool = False) -> dict:
             """List actual openings, or check original-image marks against them.
             Use heights_only=true for actual z and current height-observation coverage.
+            review_json.kind is door, window or passage (source kind=open). Coverage is complete or partial.
             See get_bim_reference("opening_review") for review_json. Saves a source-hash-bound
             review independently; never modifies the BIM or certifies image truth.
             """
@@ -2719,7 +2788,8 @@ def build_tool_server(run: Path, readonly=False):
 
 
         @server.tool()
-        def finish_bim(candidate: str, reviews_json: str = "", inferences_json: str = "") -> dict:
+        def finish_bim(candidate: str, reviews_json: str = "", inferences_json: str = "",
+                       inspection_json: str = "") -> dict:
             """Select a saved BIM and persist a handoff based on actual checks.
             Unreviewed/pending scopes remain explicit. This does not certify image
             fidelity. Whether it ends work is determined by the running entrypoint:
@@ -2730,24 +2800,43 @@ def build_tool_server(run: Path, readonly=False):
             For native mesh, reviews_json may be {"mesh_review":{"coverage":
             "whole_building" or "partial","summary":"what was checked and remains
             uncertain","overlay_ids":["overlay_001"]}}. Cite current source overlays
-            you inspected; no prescribed camera count. This is model-reported scope,
+            you inspected. Unified orchestrators can supply [] when their scope
+            judgment rests on other evidence. This is model-reported scope,
             not independent quality approval. Missing/partial/stale mesh scope does
             not complete the runtime even when a useful candidate is saved.
             Optional inferences_json is a JSON list of final interpretation declarations
             (statement, basis, reason, source_refs, missing_information, object_refs).
             object_refs is a list of {"kind":"space|boundary|opening|floor","id":"..."}.
             These are saved together on this exact source, not additional quality approval.
+            inspection_json accepts batched spatial grades/reasons and surface properties.
+            Use get_bim_reference("sim_inspection") for selectors and evidence syntax.
+            Current production runs require spatial assessments for all zones and surfaces.
             """
-            from scripts.tool_scripts.bim_agent_process_reviews import carry_reviews, require_process_reviews
+            from src.agent.execution.handoff_transaction import finish_transaction
+            from src.agent.model_revision import require_revision_descendant
+            require_revision_descendant(toolkit, candidate)
+            with finish_transaction(run, candidate):
+                return _finish_bim(candidate, reviews_json, inferences_json, inspection_json)
+
+        def _finish_bim(candidate, reviews_json, inferences_json, inspection_json):
+            from scripts.tool_scripts.bim_agent_inspection import finish_inspection
+            from scripts.tool_scripts.bim_agent_inference import prepare_inferences, save_prepared_inferences
+            from scripts.tool_scripts.bim_agent_process_reviews import (
+                carry_reviews, drawing_handoff_review, orchestrated_drawing, require_process_reviews)
             from scripts.tool_scripts.bim_agent_mesh_review import carry_mesh_review
-            if carry_mesh_review(toolkit, candidate, reviews_json) is None:
+            prepared = prepare_inferences(toolkit, inferences_json, candidate) if inferences_json else None
+            drawing_review = None
+            if orchestrated_drawing(toolkit.manifest):
+                packet = json.loads(reviews_json) if reviews_json else None
+                if not isinstance(packet, dict) or set(packet) != {"drawing_review"}:
+                    raise ValueError("finish_bim requires a drawing_review with coverage, summary and unresolved")
+                drawing_review = drawing_handoff_review(toolkit, candidate, packet["drawing_review"])
+            elif carry_mesh_review(toolkit, candidate, reviews_json) is None:
                 carry_reviews(toolkit, reviews_json, candidate)
             require_process_reviews(toolkit, candidate)
-            inference_batch = None
-            if inferences_json:
-                from scripts.tool_scripts.bim_agent_inference import record_inferences
-                inference_batch = record_inferences(toolkit, inferences_json, candidate)
-            result = toolkit.delivery(candidate, selection_origin="agent_selected",
+            has_inspection = finish_inspection(toolkit, candidate, inspection_json)
+            inference_batch = save_prepared_inferences(toolkit, *prepared) if prepared else None
+            result = toolkit.delivery(candidate, selection_origin="agent_selected", drawing_review=drawing_review,
                 generation_status={"state": "in_progress", "handoff_saved": True,
                                    "agent_response_completed": False})
             dump(run / "delivery_selection.json", {
@@ -2760,6 +2849,9 @@ def build_tool_server(run: Path, readonly=False):
                 "inputs.json", "delivery_selection.json", "delivery.json", "delivery.html",
                 f"{candidate}/source_model.json", f"{candidate}/viewer.html")}
             mesh_review_path = run / candidate / 'mesh_review.json'
+            if has_inspection:
+                inspection_name = f"{candidate}/sim_inspection.json"
+                artifacts[inspection_name] = digest(run / inspection_name)
             if toolkit.manifest.get('mesh_input') and mesh_review_path.is_file():
                 artifacts[f'{candidate}/mesh_review.json'] = digest(mesh_review_path)
             from scripts.tool_scripts.bim_agent_replies import compact_reply
@@ -2816,6 +2908,8 @@ def build_tool_server(run: Path, readonly=False):
             See get_bim_reference("edits") for operations whose format the system prompt
             does not give. Prior candidates stay unchanged.
             Opening changes/removals and shared-wall moves require a reason and source_refs.
+            shift_window_heights applies sill_delta_m and/or head_delta_m to exterior
+            windows selected by all:true, floor_ids or ids, across both proposal representations.
             set_space_role assigns catalog use and its evidence, preserving geometry.
             Optional reviews_json describes already inspected views of candidate,
             not this action's new result. See drawing_process.
@@ -2881,6 +2975,8 @@ def build_tool_server(run: Path, readonly=False):
                                  inferences_json: str = "") -> CallToolResult:
             """Expand model-declared floor templates and window rows, then build source BIM.
             Read get_bim_reference('parametric') first. Never infers or trims geometry.
+            In orchestrator mode mesh_frame may omit the frozen GLB hash, and global
+            connections may give absolute z=[bottom,top] metres or z_min and z_max.
             Explicit repeats and core service sets expand in code. Failed drafts are patchable.
             mesh_observations optionally returns current overlays of your selected
             saved cameras. inferences_json is a list of record_inference declarations

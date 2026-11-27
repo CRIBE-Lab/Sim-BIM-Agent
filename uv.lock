@@ -860,7 +860,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "scipy" },
     { name = "shapely" },
+    { name = "starlette" },
     { name = "trimesh" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -879,7 +881,9 @@ requires-dist = [
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "scipy", specifier = "==1.17.1" },
     { name = "shapely", specifier = "==2.1.2" },
+    { name = "starlette", specifier = "==1.0.0" },
     { name = "trimesh", specifier = "==4.11.5" },
+    { name = "uvicorn", specifier = "==0.44.0" },
 ]
 
 [[package]]

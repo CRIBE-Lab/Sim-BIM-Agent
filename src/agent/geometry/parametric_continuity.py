@@ -23,7 +23,7 @@ def declared_continuity_members(plan, instances=None, groups=None):
         instances, groups = _instance_records(plan)
     instance_map = {row["id"]: row for row in instances}
     generated, claimed, result = set(instance_map), set(), []
-    for declaration in declarations:
+    for index, declaration in enumerate(declarations):
         fields(declaration, ("id", "space", "source_refs"),
                ("instance_ids", "repeat_ids", "assumptions"))
         target_floor = identifier(declaration["id"])
@@ -39,7 +39,9 @@ def declared_continuity_members(plan, instances=None, groups=None):
             selected.extend(groups[repeat_id])
         if (len(selected) < 2 or len(set(selected)) != len(selected)
                 or len(set(repeat_ids)) != len(repeat_ids)):
-            raise ValueError(f"{target_floor}: select at least two unique explicit member instances")
+            raise ValueError(f"{target_floor}: select at least two unique explicit member instances; "
+                             f"inspect /continuous_spaces/{index} (instance_ids and repeat_ids); "
+                             f"selected {len(selected)} entries, {len(set(selected))} distinct")
         refs = strings(declaration["source_refs"], True)
         assumptions = strings(declaration.get("assumptions", []))
         for fid in selected:

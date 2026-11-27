@@ -17,6 +17,7 @@ from .providers import (
     OPENCODE_GO,
     SUBSCRIPTION_PROVIDERS,
     subscription_credentials,
+    is_custom_provider,
 )
 
 
@@ -108,6 +109,9 @@ class ResolvedConnection:
             from .responses import HttpResponsesAdapter
             return HttpResponsesAdapter(token_provider=self.subscription.get_access_token)
         from .adapter import HttpChatAdapter
+        if is_custom_provider(self.descriptor.route_id):
+            return HttpChatAdapter(base_url=self.descriptor.base_url, api_key=self.api_key,
+                                   allow_http=True, trust_env=False)
         from .anthropic import HttpAnthropicAdapter
         adapter_type = (HttpAnthropicAdapter
                         if self.descriptor.adapter_kind == "anthropic_messages"

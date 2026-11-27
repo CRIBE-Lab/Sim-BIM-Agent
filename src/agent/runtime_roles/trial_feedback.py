@@ -237,7 +237,7 @@ def passed_receipt(receipt):
     return bound_receipt_projection(receipt, visible)
 
 
-def bounded_json_view(document, *, pointer="", offset=0, reference_for):
+def bounded_json_view(document, *, pointer="", offset=0, reference_for, limit=None):
     """Browse verified JSON without returning large nested values in a page.
 
     The caller verifies the document and provides its own immutable references.
@@ -262,14 +262,19 @@ def bounded_json_view(document, *, pointer="", offset=0, reference_for):
         else:
             raise ValueError("report JSON pointer does not identify a saved value")
     result = {"reference": reference_for(pointer, value)}
-    if len(_bytes(value)) <= 3000 and offset == 0:
+    paged = isinstance(value, (Mapping, list, str))
+    page_size = 600 if isinstance(value, str) else 8
+    if limit is not None and paged:
+        page_size = min(page_size, limit)
+        result.update(page_unit="characters" if isinstance(value, str) else "children", page_limit=page_size)
+    if len(_bytes(value)) <= 3000 and offset == 0 and (limit is None or not paged or len(value) <= page_size):
         result["value"] = copy.deepcopy(value)
     elif isinstance(value, (Mapping, list)):
         keys = list(value) if isinstance(value, Mapping) else list(range(len(value)))
         if offset >= len(keys) and offset != 0:
             raise ValueError("report page offset is beyond the saved value")
         entries = []
-        for key in keys[offset:offset + 8]:
+        for key in keys[offset:offset + page_size]:
             child = _child(pointer, key)
             # Preserve a small row intact rather than replacing its useful
             # measurements with a larger reference and incomplete summary.
@@ -282,14 +287,14 @@ def bounded_json_view(document, *, pointer="", offset=0, reference_for):
             entries.append({"key": key, "value": preview})
         result["entries"] = entries
         result["total"] = len(keys)
-        if offset + 8 < len(keys):
-            result["next_offset"] = offset + 8
+        if offset + page_size < len(keys):
+            result["next_offset"] = offset + page_size
     elif isinstance(value, str):
         if offset >= len(value) and offset != 0:
             raise ValueError("report page offset is beyond the saved text")
-        result["text"] = value[offset:offset + 600]
-        if offset + 600 < len(value):
-            result["next_offset"] = offset + 600
+        result["text"] = value[offset:offset + page_size]
+        if offset + page_size < len(value):
+            result["next_offset"] = offset + page_size
     else:
         raise ValueError("report page requires a container or text")
     return result

@@ -33,7 +33,7 @@ def validate_reference_line_adoption(toolkit, proposal, reference):
     if not reference_line_policy(toolkit.manifest) or reference is None:
         return None
     from scripts.tool_scripts.bim_agent_architectural import (
-        _hash, _read, _inherited_modelling, validate_build_regularization)
+        _hash, _read, _inherited_modelling, effective_parametric_plan, validate_build_regularization)
     from src.agent.geometry.architectural_regularization import _hash as audit_hash
     from src.agent.geometry.parametric_proposal import expand_parametric_proposal
 
@@ -58,6 +58,8 @@ def validate_reference_line_adoption(toolkit, proposal, reference):
             expected["modelling"] = context
         if context != reference.get("modelling", {}):
             raise ValueError("architectural inherited frame context changed")
+    else:
+        expected = effective_parametric_plan(original, toolkit.manifest)
     if effective != expected:
         raise ValueError("architectural effective declaration binding changed")
     if (audit.get("status") != "adopted" or audit.get("rejections")

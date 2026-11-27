@@ -16,13 +16,13 @@ import time
 from decimal import Decimal
 from pathlib import Path
 
-from scripts.tool_scripts.bim_agent_guidance import build_guide
+from scripts.tool_scripts.bim_agent_guidance import build_guide, describe_orchestrator_inputs
 from src.agent.runtime_tools import (
     FrozenBimTools, coordinator_role, local_observer_role, frozen_bim_client,
     write_frozen_materials, write_frozen_tool_catalog,
 )
 from src.agent.runtime_context import update_building_context
-from src.agent.runtime_delivery import completed_building_handoff, finalize_runtime_building
+from src.agent.runtime_delivery import completed_building_handoff, finalize_runtime_building, publish_completed_model
 from src.agent_runtime.adapter import HttpChatAdapter, ScriptedAdapter
 from src.agent_runtime.budget import PriceSchedule
 from src.agent_runtime.accounting import require_cny_price_schedule
@@ -52,9 +52,14 @@ def prepare_inputs(output: Path, *, images: Path | None, mesh: Path | None,
                    building_input: Path | None, scope: str, image_kind: str,
                    max_candidates: int, floor_plan_images: list[str] | None = None,
                    started_epoch: float | None = None,
-                   seconds: float | None = None, process_reviews: bool = False) -> tuple[Path, str, str]:
+                   seconds: float | None = None, process_reviews: bool = False,
+                   orchestrator: bool = False, blocks: list[dict] | None = None,
+                   locale: str | None = None, thickness_candidates_mm: dict | None = None,
+                   revision: dict | None = None, revision_directory: Path | None = None) -> tuple[Path, str, str]:
     """Freeze and validate original inputs through the shared admission function."""
     from src.agent.bim_inputs import prepare_bim_inputs
+    from src.agent.geometry.thickness_options import normalize_candidates
+    thickness = normalize_candidates(thickness_candidates_mm)
     if started_epoch is None and seconds is not None:
         raise ValueError("seconds requires started_epoch")
     run = output / "bim"
@@ -63,25 +68,67 @@ def prepare_inputs(output: Path, *, images: Path | None, mesh: Path | None,
         max_candidates=max_candidates, floor_images=floor_plan_images,
         started_epoch=started_epoch, seconds=seconds)
     inventory = manifest["images"]
+    if locale is not None:
+        if locale not in ("zh-CN", "en"):
+            raise ValueError("locale must be zh-CN or en")
+        manifest["locale"] = locale
+    if blocks is not None:
+        manifest["blocks"] = blocks
+    if orchestrator:
+        manifest["orchestrator"] = True
+    from scripts.tool_scripts.bim_agent_inspection import POLICY as SPATIAL_POLICY
+    manifest["spatial_assessment_policy"] = SPATIAL_POLICY
+    manifest["thickness_candidates_mm"] = thickness
     if process_reviews:
         if image_kind != "drawings" or mesh or not inventory:
             raise ValueError("process reviews require drawing images")
         from scripts.tool_scripts.bim_agent_process_reviews import POLICY
         manifest["drawing_review_policy"] = POLICY
-        (run / "inputs.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    guide = build_guide(images=image_kind if inventory else None, mesh=bool(mesh))
+    (run / "inputs.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    guide = build_guide(images=image_kind if inventory else None, mesh=bool(mesh),
+                        orchestrator=orchestrator, sim_inspection=True)
     guide += ("\nSingle-model runtime completion: finish_bim selects your final handoff. "
         "After the current tool batch completes, a successful finish of a complete building "
         "with matching saved source and viewer ends this run without another model request. "
         "Complete intended edits and checks before finish_bim; partial or failed handoffs "
         "do not end the run. Tool completion is distinct from a final text answer.\n")
-    if process_reviews:
+    if process_reviews and not orchestrator:
         from scripts.tool_scripts.bim_agent_guidance import DRAWING_PROCESS
         guide += "\n" + DRAWING_PROCESS
-    task = scope
+    task_parts = ["Task kickoff:\n" + scope] if scope.strip() else []
+    if thickness:
+        task_parts.append("User-selected thickness candidates by component group (mm):\n"
+                          + json.dumps(thickness, ensure_ascii=False))
+    if locale is not None:
+        language = "Simplified Chinese" if locale == "zh-CN" else "English"
+        guide += (f"\nWrite progress updates, assumptions and modelling notes in {language}. "
+                  "Preserve the user's original captions and filenames as evidence.\n")
+    if blocks is not None:
+        ordered = [{"number": n, "id": b["id"], "caption": b["caption"], "files": [
+            {"number": i, "name": a["name"], "tool_filename": a["file"], "kind": a["kind"]}
+            for i, a in enumerate(b["assets"], 1)]} for n, b in enumerate(blocks, 1)]
+        task_parts.append("User material blocks in submitted order:\n" + json.dumps(ordered, ensure_ascii=False))
+    task_parts.append(describe_orchestrator_inputs(manifest))
+    if revision is not None:
+        from src.agent.model_revision import admit_revision
+        task_parts.append(admit_revision(run, revision, revision_directory))
+        guide += ("\nThis is an Edit of an existing delivered building. Start with its supplied candidate. "
+                  "The original materials and kickoff give context to this revision. The confirmed edit request "
+                  "defines the current task. Reuse valid parent evidence and audit the affected geometry. "
+                  "For properties only, derive a child with revise_bim and an empty operation list, "
+                  "then set user-confirmed inspection properties on that child before finish_bim.\n")
+    task = "\n\n".join(task_parts)
     (output / "guide.txt").write_text(guide, encoding="utf-8")
     (output / "task.txt").write_text(task, encoding="utf-8")
     return run, guide, task
+
+
+def admitted_thickness_candidates(manifest, requested):
+    from src.agent.geometry.thickness_options import normalize_candidates
+    admitted = manifest.get("thickness_candidates_mm", {})
+    if requested is not None and normalize_candidates(requested) != admitted:
+        raise ValueError("configured thickness candidates differ from the admitted run")
+    return admitted
 
 
 def publish_tool_budget(engine):
@@ -104,10 +151,20 @@ async def execute(args) -> dict:
         raise ValueError("--continue-from and --source-events-sha256 are required together")
     if getattr(args, "allow_recovery_policy_change", False) and not continue_from:
         raise ValueError("--allow-recovery-policy-change requires --continue-from")
+    orchestrator = getattr(args, "orchestrator", False)
     mesh_workers = getattr(args, "mesh_workers", 0)
+    concurrency = getattr(args, "worker_concurrency", 0)
+    if concurrency < 0 or mesh_workers and orchestrator:
+        raise ValueError("use --worker-concurrency for orchestrator tasks; specify a nonnegative concurrency")
+    if concurrency and not orchestrator:
+        raise ValueError("--worker-concurrency requires --orchestrator")
+    if not concurrency and any(getattr(args, name, None) is not None for name in
+                               ("worker_model", "worker_reasoning_effort", "worker_output_tokens")):
+        raise ValueError("worker settings require an orchestrator with positive --worker-concurrency")
+    mesh_workers = concurrency if orchestrator else mesh_workers
     worker_script = getattr(args, "mesh_worker_script", None)
     if (type(mesh_workers) is not int or mesh_workers < 0
-            or (mesh_workers and (not (args.mesh or continue_from or args.resume) or args.role != "coordinator"))):
+            or (mesh_workers and (not (args.mesh or orchestrator or continue_from or args.resume) or args.role != "coordinator"))):
         raise ValueError("mesh workers require native mesh coordinator input and positive concurrency")
     if worker_script and (not mesh_workers or args.provider != "scripted"):
         raise ValueError("mesh-worker-script requires enabled mesh workers and the scripted provider")
@@ -136,6 +193,23 @@ async def execute(args) -> dict:
     parameters = provider_parameters(args.provider, output_tokens=args.output_tokens,
         temperature=args.temperature, thinking=args.thinking, reasoning_effort=args.reasoning_effort,
         model=args.model)
+    worker_model = getattr(args, "worker_model", None) or args.model
+    worker_parameters = parameters
+    if orchestrator and mesh_workers:
+        runtime_model_profile(args.provider, worker_model)
+        worker_tokens = getattr(args, "worker_output_tokens", None)
+        worker_tokens = args.output_tokens if worker_tokens is None else worker_tokens
+        validate_output_limit(worker_model if strict_model_profile else effective_model, worker_tokens,
+                              reason=args.low_output_limit_reason)
+        worker_parameters = provider_parameters(args.provider, output_tokens=worker_tokens, model=worker_model,
+            reasoning_effort=getattr(args, "worker_reasoning_effort", None) or args.reasoning_effort,
+            temperature=args.temperature, thinking=args.thinking)
+        if args.money_cny is not None:
+            require_cny_price_schedule(worker_model, route_id=args.provider)
+        if args.price_schedule and worker_model != args.model:
+            raise ValueError("one USD price schedule cannot price two different worker/coordinator models")
+        if args.provider == "opencode-go" and model_contract(worker_model)[0] == "openai_responses" and args.reasoning_history != "all":
+            raise ValueError("OpenCode Go Responses worker requires reasoning_history=all")
     if args.provider in SUBSCRIPTION_PROVIDERS and (args.price_schedule or args.money_usd is not None or args.money_cny is not None):
         raise ValueError("subscription route has no usage-based money estimate; use token/time budgets")
     if args.money_cny is not None:
@@ -174,6 +248,8 @@ async def execute(args) -> dict:
             allow_recovery_policy_change=getattr(args, "allow_recovery_policy_change", False))
         limits = continuation.limits
         imported_source = continuation.source
+        admitted_thickness_candidates(imported_source.read_json("bim/inputs.json"),
+                                      getattr(args, "thickness_candidates_mm", None))
     elif args.resume and (output / "continuation_manifest.json").is_file():
         from src.agent_runtime.continuation import ReadOnlyRun
         from src.agent.runtime_mesh_continuation import continuation_lineage, tree_hashes
@@ -198,13 +274,15 @@ async def execute(args) -> dict:
         connection = resolve_connection(args.provider, args.credentials_file,
             chatgpt_auth_dir=getattr(args, "chatgpt_auth_dir", None))
         await validate_connection_model(connection, args.model)
+        if orchestrator and mesh_workers and worker_model != args.model:
+            await validate_connection_model(connection, worker_model)
     if continuation:
         started_epoch = time.time()
         continuation.copy_workspace(started_epoch=started_epoch)
         run, guide, task = output / "bim", continuation.guide, continuation.task
     elif args.resume:
         run = output / "bim"
-        guide, task = (output / "guide.txt").read_text(), (output / "task.txt").read_text()
+        guide, task = (output / "guide.txt").read_text(encoding="utf-8"), (output / "task.txt").read_text(encoding="utf-8")
     else:
         output.mkdir(parents=True, exist_ok=False)
         started_epoch = time.time()
@@ -212,12 +290,15 @@ async def execute(args) -> dict:
             building_input=args.building_input, scope=args.scope, image_kind=args.image_kind,
             max_candidates=args.max_candidates, floor_plan_images=args.floor_plan_images,
             started_epoch=started_epoch, seconds=limits.seconds,
-            process_reviews=getattr(args, "process_reviews", False))
-        if mesh_workers:
+            process_reviews=getattr(args, "process_reviews", False), orchestrator=orchestrator,
+            thickness_candidates_mm=getattr(args, "thickness_candidates_mm", None))
+        if mesh_workers and not orchestrator:
             from scripts.tool_scripts.bim_agent_guidance import MESH_WORKERS
             guide += "\n" + MESH_WORKERS
             (output / "guide.txt").write_text(guide, encoding="utf-8")
     manifest = json.loads((run / "inputs.json").read_bytes())
+    if args.resume:
+        admitted_thickness_candidates(manifest, getattr(args, "thickness_candidates_mm", None))
     started_epoch = manifest.get("started_epoch")
     role = (local_observer_role if args.role == "local_observer" else coordinator_role)(limits.ledger_limit())
     adapter = None
@@ -246,12 +327,26 @@ async def execute(args) -> dict:
                 route["context"] = ({"context_tokens": limits.context_tokens,
                     **context_policy.model_dump(mode="json")} if context_policy is not None
                     else {"enabled": False, "context_tokens": limits.context_tokens})
+                if orchestrator:
+                    route["orchestrator"] = True
                 if mesh_workers:
-                    from src.agent.runtime_mesh_workers import MeshWorkerTools, EXTRA_TOOLS
+                    from src.agent.runtime_mesh_workers import MeshWorkerTools
                     from src.harness_contracts.roles import ToolGrant
-                    route["mesh_workers"] = {"max_concurrent": mesh_workers,
-                        "model_policy": "same_route_and_parameters_as_coordinator",
-                        "fixture_sha256": hashlib.sha256(worker_fixture).hexdigest() if worker_fixture else None}
+                    pool = {"max_concurrent": mesh_workers,
+                            "fixture_sha256": hashlib.sha256(worker_fixture).hexdigest() if worker_fixture else None}
+                    worker_connection = connection
+                    worker_route = route
+                    if orchestrator:
+                        if args.provider == "opencode-go" and worker_model != args.model:
+                            worker_connection = resolve_connection(args.provider, args.credentials_file, model=worker_model)
+                        child_descriptor = (worker_connection.descriptor.model_route(worker_model) if worker_connection
+                                            else {"route_id": route["route_id"], "model": worker_model})
+                        route["workers"] = pool
+                        route["worker_model_configuration"] = {**child_descriptor, "parameters": worker_parameters}
+                        worker_route = {**child_descriptor, "context": route["context"],
+                                        "reasoning_history": args.reasoning_history}
+                    else:
+                        route["mesh_workers"] = {**pool, "model_policy": "same_route_and_parameters_as_coordinator"}
 
                     def worker_adapter(task_id, child):
                         if args.provider == "scripted":
@@ -261,24 +356,24 @@ async def execute(args) -> dict:
                             return ScriptedAdapter(worker_responses[task_id][offset:])
                         if args.provider == "opencode-go":
                             from src.agent_runtime.opencode_go import conversation_id
-                            return connection.create_adapter(session_id=conversation_id(output, task_id))
-                        return connection.create_adapter()
+                            return worker_connection.create_adapter(session_id=conversation_id(output, task_id))
+                        return worker_connection.create_adapter()
 
                     worker_type = MeshWorkerTools
                     if imported_source is not None:
                         from src.agent.runtime_mesh_continuation import ContinuedMeshWorkers
                         worker_type = ContinuedMeshWorkers
                     tools = worker_type(tools, store=store, root=ROOT,
-                        adapter_factory=worker_adapter, model=route["model"], parameters=parameters,
-                        route=route, limits=limits, start_epoch=started_epoch,
-                        pricing=pricing,
+                        adapter_factory=worker_adapter, model=worker_route["model"], parameters=worker_parameters,
+                        route=worker_route, limits=limits, start_epoch=started_epoch,
+                        pricing=pricing, multimodal=orchestrator,
                         max_concurrent=mesh_workers, reasoning_history=args.reasoning_history,
                         low_output_limit_reason=args.low_output_limit_reason)
                     if imported_source is not None:
                         from src.agent.runtime_mesh_continuation import source_worker_readers
                         tools.import_workers(source_worker_readers(imported_source, ROOT))
                     role = role.model_copy(update={"tool_whitelist": (*role.tool_whitelist,
-                        *(ToolGrant(tool_name=t["name"], access="read") for t in EXTRA_TOOLS))})
+                        *(ToolGrant(tool_name=t["name"], access="read") for t in tools.worker_specs))})
                 catalog = await tools.list_tools()
                 if not args.resume:
                     write_frozen_materials(output / "frozen", repository_root=ROOT)
@@ -389,14 +484,14 @@ async def execute(args) -> dict:
                             row["model_requests"] += 1
                         elif event.payload.event_type == "tool_invocation":
                             row["tool_calls"] += 1
-                    result["mesh_workers"] = state
+                    result["workers" if orchestrator else "mesh_workers"] = state
                     result["whole_run_counts"] = {
                         "model_requests": sum(row["model_requests"] for row in counts.values()),
                         "tool_calls": sum(row["tool_calls"] for row in counts.values()),
                         "by_task": counts,
                         "scope": "all journaled attempts, including recovery; usage is root_usage_accounting",
                     }
-                    store.write_json("mesh_worker_state.json", state)
+                    store.write_json("worker_state.json" if orchestrator else "mesh_worker_state.json", state)
                     store.write_json("receipt.json", result)
         # A normal BIM workspace is directly scoreable by either runner's evaluator.
         # The runtime receipt remains the authority for stop reason and accounting.
@@ -405,6 +500,7 @@ async def execute(args) -> dict:
         task_completed = (result["status"] == "completed" and bool(result.get("completion"))
             and result.get("finalization", {}).get("completion_valid") is True
             and isinstance(delivery, dict) and delivery.get("complete_building") is True)
+        publish_completed_model(output, result)
         dump(run / "summary.json", {
             "input_mode": manifest.get("input_mode"), "source_input_mode": manifest.get("source_input_mode"),
             "input_contents": manifest.get("input_contents"),
@@ -412,7 +508,7 @@ async def execute(args) -> dict:
             "task_completed": task_completed,
             "completion_origin": "domain_tool" if task_completed else None,
             "runtime_status": result["status"], "elapsed_seconds": result.get("elapsed_seconds"),
-            "delivery": ({**delivery, "report": "delivery.json", "viewer": "delivery.html"}
+            "delivery": ({**delivery, "report": "delivery.json", "viewer": f"{delivery['candidate']}/viewer.html"}
                          if delivery else None),
             "receipt": "../receipt.json", "drawing_fidelity": "not_evaluated"})
         from src.agent.runtime_behaviour import write_behaviour_report
@@ -432,7 +528,14 @@ def parser():
     p.add_argument("--floor-plan-image", dest="floor_plan_images", action="append",
                    help="Explicit expected floor-plan filename; repeat for all floors")
     p.add_argument("--mesh", type=Path)
-    p.add_argument("--mesh-workers", type=int, default=0, metavar="MAX_CONCURRENT",
+    p.add_argument("--thickness-candidates-mm", type=json.loads,
+                   help="JSON groups of candidate thicknesses in millimetres: wall, horizontal, roof, glazing")
+    p.add_argument("--orchestrator", action="store_true", help="coordinate available building inputs in one run")
+    p.add_argument("--worker-model", help="optional observer model on the coordinator's provider")
+    p.add_argument("--worker-concurrency", type=int, default=0, help="maximum simultaneous optional observers")
+    p.add_argument("--worker-reasoning-effort", help="override the coordinator's effort for observer requests")
+    p.add_argument("--worker-output-tokens", type=int, help="override the coordinator's output allowance for observers")
+    p.add_argument("--mesh-workers", "--mesh-worker-concurrency", type=int, default=0, metavar="MAX_CONCURRENT",
                    help="enable optional same-route read-only mesh workers under the shared run budget")
     p.add_argument("--mesh-worker-script", type=Path,
                    help="offline only: JSON mapping worker task IDs to scripted response lists")
@@ -440,7 +543,7 @@ def parser():
     p.add_argument("--image-kind", choices=("drawings", "mesh_views", "photos", "unknown"), default="drawings")
     p.add_argument("--process-reviews", action="store_true",
                    help="require local drawing reviews and a separate architectural judgment before complete delivery")
-    p.add_argument("--scope", default="Build the supplied building at the requested detail; inspect saved results and report limitations.")
+    p.add_argument("--scope", default="", help="Optional user description of the building or requested scope.")
     p.add_argument("--role", choices=("coordinator", "local_observer"), default="coordinator")
     p.add_argument("--provider", choices=("scripted", *LIVE_PROVIDERS), required=True)
     p.add_argument("--script", type=Path, help="explicit offline Chat Completions response fixture")
@@ -510,7 +613,7 @@ def parser():
 def main():
     args = parser().parse_args()
     result = asyncio.run(execute(args))
-    print(json.dumps({key: result[key] for key in ("status", "model_calls", "tool_calls", "reported_tokens", "billing_usd")}, ensure_ascii=False))
+    print(json.dumps({key: result[key] for key in ("status", "model_calls", "tool_calls", "reported_tokens", "billing_usd", "viewer") if key in result}, ensure_ascii=False))
     raise SystemExit(0 if result["status"] in {"completed", "model_budget_exhausted", "tool_budget_exhausted", "time_budget_exhausted", "token_budget_exhausted", "money_budget_exhausted", "model_profile_context_limit_exhausted", "configured_context_limit_exhausted"} else 1)
 
 

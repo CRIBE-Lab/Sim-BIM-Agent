@@ -154,7 +154,7 @@ def _find(rows: list[dict], identity: str, *, operation: str) -> dict:
     return matches[0]
 
 
-def _update(geometry: dict, operation: dict, *, target: str) -> dict:
+def _update(geometry: dict, operation: dict, *, target: str, selected_row=None) -> dict:
     name = operation["op"]
     _require_fields(operation, {"op", "id", "changes", "reason", "source_refs"}, operation=name)
     identity = _nonblank_string(operation.get("id"), field="id", operation=name)
@@ -169,7 +169,7 @@ def _update(geometry: dict, operation: dict, *, target: str) -> dict:
         raise ValueError(f"{name}: unsupported changes {sorted(unknown)}")
     if "assumptions" in changes:
         _notes(changes["assumptions"], field="changes.assumptions")
-    row = _find(geometry[f"{target}s"], identity, operation=name)
+    row = selected_row if selected_row is not None else _find(geometry[f"{target}s"], identity, operation=name)
     before = copy.deepcopy(row)
     row.update(copy.deepcopy(changes))
     if 'curve_segment' in changes:
@@ -189,6 +189,65 @@ def _update(geometry: dict, operation: dict, *, target: str) -> dict:
     row["source_refs"] = refs
     return {"operation": name, "id": identity, "reason": reason, "source_refs": refs,
             "before": before, "after": copy.deepcopy(row)}
+
+
+def _shift_window_heights(geometry, operation):
+    name = "shift_window_heights"
+    _require_fields(operation, {"op", "all", "ids", "floor_ids", "sill_delta_m", "head_delta_m",
+                                "reason", "source_refs"}, operation=name)
+    reason = _nonblank_string(operation.get("reason"), field="reason", operation=name)
+    refs = _source_refs(operation.get("source_refs"), operation=name)
+    deltas = [operation.get(field, 0) for field in ("sill_delta_m", "head_delta_m")]
+    if any(type(v) not in (int, float) or not math.isfinite(v) for v in deltas) or not any(deltas):
+        raise ValueError(f"{name}: supply a finite nonzero sill_delta_m or head_delta_m (metres)")
+    filters = {key: operation[key] for key in ("ids", "floor_ids") if key in operation}
+    if ("all" in operation and (operation["all"] is not True or filters)) or (not filters and "all" not in operation):
+        raise ValueError(f"{name}: use all:true alone or select floor_ids and/or ids")
+    for key, values in filters.items():
+        if (not isinstance(values, list) or not values or any(not isinstance(v, str) or not v for v in values)
+                or len(set(values)) != len(values)):
+            raise ValueError(f"{name}: {key} must be a nonempty list of unique IDs")
+    floors = {f.get("id") or f["name"]: f for f in geometry["floors"]}
+    wanted_floors = set(filters.get("floor_ids", ()))
+    if missing := wanted_floors - floors.keys():
+        raise ValueError(f"{name}: unknown floor_ids {sorted(missing)}")
+    hosts = {c["id"]: fid for fid, floor in floors.items() for c in floor["cells"]}
+    wanted_ids = set(filters.get("ids", ()))
+    changes = []
+    for target in ("window", "opening"):
+        for row in geometry.get(target + "s", ()):
+            if target == "opening" and (row.get("kind") != "window" or row.get("other_space_id") is not None):
+                continue
+            identity = row["id"]
+            if wanted_ids and identity not in wanted_ids:
+                continue
+            host = row.get("room") if target == "window" else row["space_id"]
+            if host not in hosts:
+                raise ValueError(f"{name}: window {identity!r} has no known host space")
+            fid = hosts[host]
+            sill, head = row["z"]
+            if wanted_floors and fid not in wanted_floors and not any(
+                host in floors[key].get("spanning_space_ids", ()) and
+                min(head, floors[key]["z_floor"] + floors[key]["ceiling_height"]) > max(sill, floors[key]["z_floor"])
+                for key in wanted_floors
+            ):
+                continue
+            new_z = [sill + deltas[0], head + deltas[1]]
+            floor = floors[fid]
+            lo, hi = floor["z_floor"], floor["z_floor"] + floor["ceiling_height"]
+            if not (lo - 1e-7 <= new_z[0] < new_z[1] <= hi + 1e-7):
+                raise ValueError(f"{name}: {identity} would have sill/head {new_z} outside host bounds "
+                                 f"[{lo}, {hi}] or nonpositive height. Adjust offsets or narrow the selection.")
+            edit = {"op": "update_" + target, "id": identity, "changes": {"z": new_z},
+                    "reason": reason, "source_refs": refs}
+            audit = _update(geometry, edit, target=target, selected_row=row)
+            changes.append({"target": target, "id": identity, "before_z": audit["before"]["z"],
+                            "after_z": new_z, "previous_source_refs": audit["before"].get("source_refs", [])})
+    if missing := wanted_ids - {change["id"] for change in changes}:
+        raise ValueError(f"{name}: IDs are not exterior windows in the selected scope: {sorted(missing)}")
+    if not changes:
+        raise ValueError(f"{name}: scope contains no exterior windows")
+    return {"operation": name, "reason": reason, "source_refs": refs, "changes": changes}
 
 
 def _remove_opening(geometry: dict, operation: dict) -> dict:
@@ -416,6 +475,55 @@ def _set_cell_polygon(cell: dict, shape: Polygon) -> None:
     cell["y"] = [float(shape.bounds[1]), float(shape.bounds[3])]
 
 
+def _translated_partition(old_shapes, new_shapes):
+    """Recover the original two vertex orders when a complete straight common edge translates."""
+    edges = []
+    for first, second in (old_shapes, new_shapes):
+        edge = first.boundary.intersection(second.boundary)
+        if edge.geom_type != "LineString" or edge.is_empty or len(edge.coords) != 2:
+            return None
+        edges.append(sorted(edge.coords))
+    old_edge, new_edge = edges
+    shifts = [(b[0] - a[0], b[1] - a[1]) for a, b in zip(old_edge, new_edge)]
+    if math.dist(shifts[0], shifts[1]) > _LOCAL_PARTITION_TOLERANCE_M or old_edge == new_edge:
+        return None
+    moved = dict(zip(old_edge, new_edge))
+    result = []
+    for old, expected in zip(old_shapes, new_shapes):
+        ring = list(old.exterior.coords)[:-1]
+        if not moved.keys() <= set(ring):
+            return None
+        rebuilt = Polygon([moved.get(point, point) for point in ring])
+        if not rebuilt.is_valid or not rebuilt.equals(expected):
+            return None
+        result.append(rebuilt)
+    return result
+
+
+def _partition_enclosure_state(proposal):
+    """Bind enclosure evidence and apertures through the same kernel used for final delivery."""
+    from src.agent.execution.source_proposal import compile_source_proposal
+
+    if proposal["enclosure_declaration"].get("schema_version") != "source_enclosure_intent_v1":
+        raise ValueError("replace_space_region: a source-bound or unknown enclosure_declaration requires an explicit revised proposal")
+    source, report = compile_source_proposal(proposal)
+    if not report["source_geometry_ready"]:
+        raise ValueError("replace_space_region: cannot preserve the enclosure and opening bindings: "
+                         + str(report.get("error") or report.get("source_validation", {}).get("findings", [])[:2]))
+    enclosure = source["source_enclosure"]
+    observed = {(row["target_type"], row["target_id"]) for row in enclosure["applications"]}
+    observed_faces = {identity for kind, identity in observed if kind == "boundary"}
+    return {
+        "intent_binding": enclosure["intent_binding"], "applications": enclosure["applications"],
+        "open_connections": enclosure["open_connections"],
+        "declared_spaces": [s for s in source["spaces"] if ("space", s["id"]) in observed],
+        "declared_faces": [b for b in source["boundaries"] if b["id"] in observed_faces],
+        "declared_contacts": [r for r in source["boundary_relations"] if observed_faces.intersection(r["boundary_ids"])],
+        "opening_hosts": source["opening_hosts"], "openings": source["openings"],
+        "connections": source["connections"], "unbuilt_openings": source["unbuilt_openings"],
+    }
+
+
 def _replace_space_region(proposal: dict, geometry: dict, operation: dict) -> dict:
     """Replace one source room and derive its adjacent room's exact remainder.
 
@@ -425,8 +533,6 @@ def _replace_space_region(proposal: dict, geometry: dict, operation: dict) -> di
     """
     name = "replace_space_region"
     _require_fields(operation, {"op", "space_id", "neighbor_space_id", "polygon", "reason", "source_refs"}, operation=name)
-    if proposal.get("enclosure_declaration") is not None:
-        raise ValueError("replace_space_region: explicit enclosure_declaration requires an explicit revised proposal")
     if proposal.get("wall_references") or proposal.get("wall_dimensions"):
         raise ValueError("replace_space_region: wall references/dimensions require an explicit revised proposal")
     space_id = _nonblank_string(operation.get("space_id"), field="space_id", operation=name)
@@ -467,6 +573,12 @@ def _replace_space_region(proposal: dict, geometry: dict, operation: dict) -> di
     if unary_union([new_target, new_neighbor]).symmetric_difference(old_region).area > _LOCAL_PARTITION_AREA_TOLERANCE_M2:
         raise ValueError("replace_space_region: replacement does not preserve the original two-space coverage")
 
+    translated = _translated_partition((old_target, old_neighbor), (new_target, new_neighbor))
+    if translated is not None:
+        new_target, new_neighbor = translated
+    elif proposal.get("enclosure_declaration") is not None:
+        raise ValueError("replace_space_region: with an enclosure_declaration, move one complete straight shared "
+                         "edge in parallel. Keep the other vertices at their original coordinates.")
     before_cells = {space_id: copy.deepcopy(target_cell), neighbor_id: copy.deepcopy(neighbor_cell)}
     _set_cell_polygon(target_cell, new_target)
     _set_cell_polygon(neighbor_cell, new_neighbor)
@@ -804,6 +916,7 @@ def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
         if not isinstance(operation, dict) or not isinstance(operation.get("op"), str):
             raise ValueError("each operation must be an object with an op")
         name = operation["op"]
+        enclosure_before = None
         if name == "reflect":
             _require_fields(operation, {"op", "axis", "reason"}, operation=name)
             if result.get("wall_references") or result.get("wall_dimensions"):
@@ -820,6 +933,8 @@ def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
             audit = _update(geometry, operation, target="window")
         elif name == "update_opening":
             audit = _update(geometry, operation, target="opening")
+        elif name == "shift_window_heights":
+            audit = _shift_window_heights(geometry, operation)
         elif name == "set_space_role":
             audit = _set_space_role(geometry, operation)
         elif name == "add_opening":
@@ -833,6 +948,8 @@ def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
         elif name == "reshape_spaces":
             audit = _reshape_spaces(result, geometry, operation)
         elif name == "replace_space_region":
+            if result.get("enclosure_declaration") is not None:
+                enclosure_before = _partition_enclosure_state(result)
             audit = _replace_space_region(result, geometry, operation)
         elif name == "set_notes":
             audit = _set_notes(result, operation)
@@ -857,6 +974,9 @@ def apply_proposal_edits(proposal: dict, operations: list[dict]) -> dict:
             _reflect_wall_readings(result, audit, len(corrections))
         elif name in {"move_shared_wall", "reshape_spaces", "replace_space_region"}:
             _rebind_edited_wall_readings(result, audit, len(corrections))
+        if enclosure_before is not None and _partition_enclosure_state(result) != enclosure_before:
+            raise ValueError("replace_space_region: the edit changes a declared enclosure, contact or opening binding. "
+                             "Supply an explicit revised proposal for the affected enclosure or aperture.")
         corrections.append(audit)
         _unique_ids(geometry)
     parse_geometry(geometry)

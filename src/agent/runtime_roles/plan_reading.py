@@ -216,7 +216,7 @@ def build_reading(plan, *, workspace, image_name, number):
                    "known": known_wall_count, "unknown": len(walls) - known_wall_count,
                    "defaulted_unknown": sum(row["target"] not in supplied_wall_targets for row in walls)},
         "scope": "Wall metadata for this floor; counts do not establish drawing completeness.",
-        "note": "Every adopted wall has a 1 cm thickness. Inferred batch values remain labelled inferred; "
+        "note": "Documented wall widths retain their precision. Inferred widths use a 1 cm grid; "
                 "clean plan and overlay use the same adopted coordinates and wall attributes.",
         "rendering": wall_views["summary"],
     }

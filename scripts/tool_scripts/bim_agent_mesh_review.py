@@ -48,7 +48,7 @@ def _json(path: Path) -> dict:
     return value
 
 
-def _declaration(value: dict) -> dict:
+def _declaration(value: dict, manifest: dict) -> dict:
     if not isinstance(value, dict) or set(value) != {"coverage", "summary", "overlay_ids"}:
         raise ValueError("mesh_review requires coverage, summary and overlay_ids")
     if not isinstance(value["coverage"], str) or value["coverage"] not in {"whole_building", "partial"}:
@@ -56,9 +56,11 @@ def _declaration(value: dict) -> dict:
     if not isinstance(value["summary"], str) or not value["summary"].strip():
         raise ValueError("mesh_review summary must be nonempty")
     ids = value["overlay_ids"]
-    if (not isinstance(ids, list) or not ids or
+    if (not isinstance(ids, list) or
             any(not isinstance(item, str) or not re.fullmatch(r"overlay_\d+", item) for item in ids)
             or len(set(ids)) != len(ids)):
+        raise ValueError("mesh_review overlay_ids must list distinct overlay IDs")
+    if not ids and manifest.get("orchestrator") is not True:
         raise ValueError("mesh_review needs at least one distinct overlay ID")
     return {"coverage": value["coverage"], "summary": value["summary"], "overlay_ids": list(ids)}
 
@@ -183,7 +185,7 @@ def validate_mesh_review(run, candidate, source, manifest, record=None) -> dict:
                 or record.get("fidelity") != "not_evaluated"
                 or record.get("record_digest") != _digest({k: v for k, v in record.items() if k != "record_digest"})):
             raise ValueError("saved mesh review identity or digest changed")
-        declaration = _declaration(record["declaration"])
+        declaration = _declaration(record["declaration"], manifest)
         if record.get("evidence") != _evidence(run, candidate, source, manifest, declaration):
             raise ValueError("mesh review evidence changed")
         return _status(candidate, "current", declaration=declaration, record_sha256=file_sha)
@@ -216,7 +218,7 @@ def carry_mesh_review(toolkit, candidate, reviews_json) -> dict | None:
         raise ValueError("mesh reviews_json must contain only mesh_review")
     if not toolkit.manifest.get("mesh_input"):
         raise ValueError("mesh_review is not accepted for drawing-only runs")
-    declaration = _declaration(payload["mesh_review"])
+    declaration = _declaration(payload["mesh_review"], toolkit.manifest)
     _candidate(candidate)
     source = _json(_path(toolkit.run, f"{candidate}/source_model.json"))
     record = {"policy": POLICY, "candidate": candidate, "declaration": declaration,

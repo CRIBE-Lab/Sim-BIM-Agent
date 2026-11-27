@@ -35,6 +35,7 @@ def demo(output: Path):
     """Exercise the real local BIM tools with a clearly synthetic two-room plan."""
     from src.agent_runtime.run_paths import resolve_run_output
     from src.agent.bim_inputs import prepare_bim_inputs
+    from src.agent.viewer_publication import publish_viewer
     from PIL import Image, ImageDraw
     from scripts.tool_scripts.bim_agent_guidance import REFERENCES
     from scripts.tool_scripts.run_bim_agent import Toolkit
@@ -63,11 +64,12 @@ def demo(output: Path):
     if not result.get("source_geometry_ready"):
         raise ValueError("Offline demonstration did not produce valid geometry")
     candidate = output / result["candidate"]
+    viewer = publish_viewer(output, result["candidate"], output)
     source = json.loads((candidate / "source_model.json").read_bytes())
     summary = {"status": "completed", "kind": "synthetic_offline_demo", "model_requests": 0,
                "spaces": len(source["spaces"]), "openings": len(source["openings"]),
                "source_model": str(candidate / "source_model.json"),
-               "viewer": str(candidate / "viewer.html"), "drawing_fidelity": "not_evaluated"}
+               "viewer": str(viewer), "drawing_fidelity": "not_evaluated"}
     (output / "demo-result.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     return summary
 
@@ -75,6 +77,9 @@ def demo(output: Path):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="Sim-BIM Agent", description="Generate and inspect lightweight BIM.")
     commands = parser.add_subparsers(dest="action")
+    desk = commands.add_parser("workbench", help="open the local modelling workspace in your browser")
+    desk.add_argument("--port", type=int, help="override the installation's local port (0 chooses any free port)")
+    desk.add_argument("--no-browser", action="store_true")
     commands.add_parser("doctor", help="verify installed files and dependencies without contacting a model")
     sample = commands.add_parser("demo", help="build a small synthetic BIM locally, without a model")
     sample.add_argument("--output", type=Path, required=True)
@@ -87,11 +92,23 @@ def main(argv=None):
             command.add_argument("--resume", action="store_true")
     auth = commands.add_parser("auth", help="manage your own ChatGPT subscription sign-in")
     auth.add_argument("auth_action", choices=("status", "login", "models", "logout"))
+    auth.add_argument("--directory", type=Path, help="override the protected ChatGPT subscription store")
+    account = auth.add_mutually_exclusive_group()
+    account.add_argument("--new-account", action="store_true",
+                         help="login only: authorize another ChatGPT account or workspace")
+    account.add_argument("--client-id",
+                         help="login only: reauthorize a saved account listed by auth status")
     args = parser.parse_args(argv)
+    if (args.action == "auth" and args.auth_action != "login"
+            and (args.new_account or args.client_id is not None)):
+        auth.error("--new-account and --client-id are only valid with login")
     if args.action is None:
         parser.print_help()
         return 0
     try:
+        if args.action == "workbench":
+            from src.workbench.server import serve
+            return serve(args.port, not args.no_browser)
         identity = doctor()
         if args.action == "doctor":
             result = identity
@@ -99,7 +116,13 @@ def main(argv=None):
             result = demo(args.output)
         elif args.action == "auth":
             from src.agent_runtime.openai_subscription import main as subscription_main
-            return subscription_main([args.auth_action])
+            auth_argv = (["--directory", str(args.directory)] if args.directory is not None else [])
+            auth_argv.append(args.auth_action)
+            if args.new_account:
+                auth_argv.append("--new-account")
+            elif args.client_id is not None:
+                auth_argv += ["--client-id", args.client_id]
+            return subscription_main(auth_argv)
         else:
             command = [sys.executable, "-B", "-m", "src.agent.runtime_configuration",
                        "launch" if args.action == "run" else "check", str(args.configuration.resolve())]

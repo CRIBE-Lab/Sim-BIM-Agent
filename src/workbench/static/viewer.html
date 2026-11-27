@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sim-BIM</title>
+  <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/viewer-draft.js?v=3" defer></script>
+  <script type="module" src="/static/viewer-host.js"></script>
+</head>
+<body class="model-page">
+  <nav class="model-return" aria-label="Workspace">
+    <a href="/" data-t="inputs">Inputs</a><span aria-hidden="true">/</span>
+    <a id="activity-link" data-t="activity">Run activity</a>
+    <a id="download-model" download="Sim-BIM.html" data-t="download" hidden>Download HTML</a>
+    <button type="button" id="update-preview" class="text-button" data-t="updatedModel" hidden>Open updated model</button>
+    <button type="button" id="submit-edits" class="button primary" data-t="submitEdits" hidden>Submit edits…</button>
+  </nav>
+  <iframe title="Sim-BIM" sandbox="allow-scripts allow-downloads allow-forms"></iframe>
+  <dialog id="revision-dialog" aria-labelledby="revision-title">
+    <div class="dialog-head"><h2 id="revision-title" data-t="confirmRevision">Review edits</h2></div>
+    <div class="revision-body">
+      <p data-t="revisionExplanation">The model will use these edits and the original materials to create a new version.</p>
+      <div id="revision-summary"></div>
+      <p id="revision-error" class="dialog-note error" role="alert" hidden></p>
+      <a id="failed-revision" data-t="viewFailedRevision" hidden>View failed run</a>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-revision" class="button" data-t="cancel" autofocus>Cancel</button>
+        <button type="button" id="confirm-revision" class="button primary" data-t="runRevision">Start revision</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
